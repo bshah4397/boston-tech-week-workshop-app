@@ -29,6 +29,16 @@ type PatientContextResponse = {
 
 type SmartState = "callback received" | "patient loaded" | "patient load failed";
 
+type PatientContextRequest = {
+  key: number;
+  updatedPatient?: string;
+};
+
+type PatientContextChange = {
+  key: number;
+  patientIdentifier: string;
+};
+
 const prepCards = [
   {
     label: "Vitals review due",
@@ -43,6 +53,34 @@ const prepCards = [
 ];
 
 export default function TemplateApp({ appBasePath, query, route, slotId }: SlotAppProps) {
+  const [patientContextChange, setPatientContextChange] = useState<PatientContextChange | null>(null);
+
+  useEffect(() => {
+    function handleWindowMessage(event: MessageEvent<unknown>) {
+      console.log("[app-101] received window message", event.data);
+
+      if (!isRecord(event.data) || event.data.event !== "patientContextChanged") {
+        return;
+      }
+
+      const patientIdentifier = patientIdentifierFromMessage(event.data);
+      if (!patientIdentifier) {
+        return;
+      }
+
+      setPatientContextChange((currentChange) => ({
+        key: (currentChange?.key ?? 0) + 1,
+        patientIdentifier,
+      }));
+    }
+
+    window.addEventListener("message", handleWindowMessage);
+
+    return () => {
+      window.removeEventListener("message", handleWindowMessage);
+    };
+  }, []);
+
   if (route === "logout-complete") {
     return <LogoutCompleteScreen appBasePath={appBasePath} slotId={slotId} />;
   }
@@ -63,7 +101,7 @@ export default function TemplateApp({ appBasePath, query, route, slotId }: SlotA
     return <VisitPrepDemo slotId={slotId} stateLabel="Local Demo" />;
   }
 
-  return <SmartVisitPrep appBasePath={appBasePath} query={query} slotId={slotId} />;
+  return <SmartVisitPrep appBasePath={appBasePath} patientContextChange={patientContextChange} query={query} slotId={slotId} />;
 }
 
 function LaunchScreen({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
@@ -153,16 +191,27 @@ function CallbackScreen({ appBasePath, slotId }: { appBasePath: string; slotId: 
   );
 }
 
-function SmartVisitPrep({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
+function SmartVisitPrep({
+  appBasePath,
+  patientContextChange,
+  query,
+  slotId,
+}: {
+  appBasePath: string;
+  patientContextChange: PatientContextChange | null;
+  query: URLSearchParams;
+  slotId: string;
+}) {
   const [state, setState] = useState<SmartState>("callback received");
   const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
+  const [contextRequest, setContextRequest] = useState<PatientContextRequest>({ key: 0 });
 
   useEffect(() => {
     let isMounted = true;
 
     async function loadPatientContext() {
       try {
-        const response = await fetch(patientContextApiPath(slotId), {
+        const response = await fetch(patientContextApiPath(slotId, contextRequest.updatedPatient), {
           headers: { Accept: "application/json" },
           method: "GET",
         });
@@ -194,7 +243,20 @@ function SmartVisitPrep({ appBasePath, query, slotId }: { appBasePath: string; q
     return () => {
       isMounted = false;
     };
-  }, [slotId]);
+  }, [contextRequest, slotId]);
+
+  useEffect(() => {
+    if (!patientContextChange) {
+      return;
+    }
+
+    setState("callback received");
+    setPatientSummary(null);
+    setContextRequest({
+      key: patientContextChange.key,
+      updatedPatient: patientContextChange.patientIdentifier,
+    });
+  }, [patientContextChange]);
 
   if (state === "patient loaded" && patientSummary) {
     return <VisitPrepDemo patientSummary={patientSummary} slotId={slotId} />;
@@ -239,6 +301,11 @@ function VisitPrepDemo({
 }) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isVitalsReviewed, setIsVitalsReviewed] = useState(false);
+
+  useEffect(() => {
+    setIsDetailOpen(false);
+    setIsVitalsReviewed(false);
+  }, [patientSummary.fhirId]);
 
   useEffect(() => {
     if (!isVitalsReviewed) {
@@ -427,6 +494,18 @@ function patientSummaryFromContext(context: PatientContextResponse): PatientSumm
   };
 }
 
+function patientIdentifierFromMessage(message: Record<string, unknown>) {
+  const patient = isRecord(message.patient) ? stringValue(message.patient.id) : null;
+  return (
+    stringValue(message.updatedPatient) ||
+    stringValue(message.patientId) ||
+    stringValue(message.patientID) ||
+    stringValue(message.patientIdentifier) ||
+    stringValue(message.fhirPatientId) ||
+    patient
+  );
+}
+
 function patientName(patientResource: Record<string, unknown>) {
   if (typeof patientResource.name === "string") return patientResource.name;
   if (!Array.isArray(patientResource.name)) return null;
@@ -455,5 +534,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function stringValue(value: unknown) {
+  if (typeof value === "number") return String(value);
   return typeof value === "string" && value.length > 0 ? value : null;
 }

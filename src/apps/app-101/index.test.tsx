@@ -16,6 +16,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+function patientContextResponse(patientId: string, name: string) {
+  const [given, family] = name.split(" ");
+
+  return Response.json({
+    patient: {
+      birthDate: "1975-04-12",
+      gender: "female",
+      id: patientId,
+      name: [{ family, given: [given] }],
+    },
+    patientId,
+    source: "smart",
+  });
+}
+
 describe("app-101 Visit Prep sidecar", () => {
   it("preserves local demo mode", () => {
     render(<App101 {...baseProps} />);
@@ -166,18 +181,7 @@ describe("app-101 Visit Prep sidecar", () => {
   it("loads and renders sanitized patient context from the slot-scoped API", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        Response.json({
-          patient: {
-            birthDate: "1975-04-12",
-            gender: "female",
-            id: "patient-123",
-            name: [{ family: "Rivers", given: ["Alex"] }],
-          },
-          patientId: "patient-123",
-          source: "smart",
-        }),
-      ),
+      vi.fn(async () => patientContextResponse("patient-123", "Alex Rivers")),
     );
 
     render(<App101 {...baseProps} fullPath="/app-101" query={new URLSearchParams({ smart: "1" })} route="home" />);
@@ -200,6 +204,66 @@ describe("app-101 Visit Prep sidecar", () => {
     expect(screen.queryByText(/highlight/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/bearer/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/authorization/i)).not.toBeInTheDocument();
+  });
+
+  it("logs every window message before filtering", async () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => patientContextResponse("patient-123", "Alex Rivers")));
+
+    render(<App101 {...baseProps} fullPath="/app-101" route="home" />);
+    await waitFor(() => expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument());
+
+    const unrelatedMessage = { event: "notPatientContextChanged", updatedPatient: "5" };
+    window.dispatchEvent(new MessageEvent("message", { data: unrelatedMessage }));
+
+    expect(consoleLog).toHaveBeenCalledWith("[app-101] received window message", unrelatedMessage);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("reloads updated patient context from updatedPatient and resets detail review state", async () => {
+    const user = userEvent.setup();
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValueOnce(patientContextResponse("patient-123", "Alex Rivers"))
+        .mockResolvedValueOnce(patientContextResponse("a-195900.E-5", "Jamie Chen")),
+    );
+
+    render(<App101 {...baseProps} fullPath="/app-101" route="home" />);
+    await waitFor(() => expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument());
+
+    await user.click(screen.getByRole("button", { name: "Open details" }));
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+    expect(screen.getByText("Reviewed")).toBeInTheDocument();
+
+    window.dispatchEvent(new MessageEvent("message", { data: { event: "patientContextChanged", updatedPatient: "5" } }));
+
+    await waitFor(() => expect(screen.getByText("Jamie Chen")).toBeInTheDocument());
+    expect(fetch).toHaveBeenNthCalledWith(1, "/api/apps/app-101/patient-context", expect.objectContaining({ method: "GET" }));
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "/api/apps/app-101/patient-context?updatedPatient=5",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("FHIR ID a-195900.E-5")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
+    expect(screen.queryByText("Reviewed")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Needs review")).toBeInTheDocument();
+  });
+
+  it("does not reload plain patient context for patient-change events without an identifier", async () => {
+    vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.stubGlobal("fetch", vi.fn(async () => patientContextResponse("patient-123", "Alex Rivers")));
+
+    render(<App101 {...baseProps} fullPath="/app-101" route="home" />);
+    await waitFor(() => expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument());
+
+    window.dispatchEvent(new MessageEvent("message", { data: { event: "patientContextChanged" } }));
+
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("shows patient load failed when patient context cannot be read", async () => {
