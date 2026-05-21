@@ -219,6 +219,57 @@ describe("app-101 SMART patient states", () => {
     );
   });
 
+  it("reloads patient identity when the framework sends updatedPatient", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        patient: {
+          birthDate: "1975-11-12",
+          gender: "female",
+          id: "5",
+          name: [{ family: "Patel", given: ["Rina"] }],
+          resourceType: "Patient",
+        },
+        patientId: "5",
+        source: "framework-context-change",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+    await user.click(screen.getByRole("button", { name: "Snooze while I update Athena" }));
+    expect(screen.getByRole("region", { name: "Reminder state" })).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            event: "patientContextChanged",
+            type: "embeddedAppFrameworkEvent",
+            updatedPatient: "5",
+          },
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Rina Patel")).toBeInTheDocument();
+    expect(screen.getByText("DOB 1975-11-12")).toBeInTheDocument();
+    expect(screen.getByText("FHIR ID 5")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Reminder state" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/apps/app-101/patient-context",
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
+    );
+  });
+
   it("shows setup required when no SMART patient context is available", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ accessToken: "server-token", error: "No active SMART session." }, 401));
     vi.stubGlobal("fetch", fetchMock);

@@ -711,6 +711,8 @@ function patientIdentifierFromMessage(value: unknown, depth = 0): string | null 
     stringValue(record.patientID) ??
     stringValue(record.patientIdentifier) ??
     stringValue(record.fhirPatientId) ??
+    stringValue(record.updatedPatient) ??
+    patientIdentifierFromPatientRecord(record.updatedPatient) ??
     patientIdentifierFromPatientRecord(record.patient);
 
   if (directIdentifier) return directIdentifier;
