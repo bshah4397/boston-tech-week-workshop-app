@@ -15,6 +15,7 @@ The URL contract is:
 - `/api/apps/app-XXX/smart/callback` for the Athena post-login redirect URL
 - `/app-XXX/logout-complete` for the Athena post-logout redirect URL
 - `/api/apps/app-XXX/patient-context` for server-side Patient read after SMART callback
+- `/api/apps/app-XXX/patient-context?updatedPatient=5` for server-side Patient read after a framework `patientContextChanged` message
 
 The shared source app is:
 
@@ -103,6 +104,8 @@ The shared API layer owns:
 - callback code exchange
 - slot-specific encrypted launch/session cookies
 - server-side FHIR Patient read
+
+When Athena sends a postMessage like `{ event: "patientContextChanged", updatedPatient: "5" }`, slot apps should reload patient context with `?updatedPatient=5`. The shared API resolves numeric Athena patient ids into the current SMART session's FHIR id pattern, for example `a-195900.E-5`, before reading `Patient/{id}`.
 
 ## Commands
 

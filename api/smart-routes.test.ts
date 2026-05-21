@@ -191,6 +191,53 @@ describe("slot patient context API", () => {
       source: "smart",
     });
   });
+
+  it("reads the updated patient from a framework context-change event", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          gender: "female",
+          id: "a-195900.E-5",
+          resourceType: "Patient",
+        }),
+      ),
+    );
+    const sessionCookie = await createSessionCookie(
+      "smart_session_app-007",
+      {
+        accessToken: "server-side-token",
+        expiresAt: Date.now() + 3600000,
+        fhirUser: "Practitioner/prac-1",
+        patientId: "a-195900.E-12",
+        scope: SMART_SCOPES,
+        serverUrl: "https://api.preview.platform.athenahealth.com/fhir/r4",
+        tokenType: "Bearer",
+      },
+      { maxAgeSeconds: 3600, secure: true },
+    );
+
+    const res = createMockResponse();
+    await patientContextHandler(
+      makeRequest("https://workshop.example/api/apps/app-007/patient-context?updatedPatient=5", { cookie: sessionCookie }),
+      res,
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.preview.platform.athenahealth.com/fhir/r4/Patient/a-195900.E-5",
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer server-side-token",
+        }),
+      }),
+    );
+    expect(JSON.parse(res.body)).toMatchObject({
+      patient: { id: "a-195900.E-5" },
+      patientId: "a-195900.E-5",
+      requestedPatient: "5",
+      source: "smart",
+    });
+  });
 });
 
 describe("shared authorize URL helper", () => {

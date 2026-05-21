@@ -65,4 +65,11 @@ describe("app host", () => {
     );
     expect(message.method).toBe("appResize");
   });
+
+  it("the template patient context helper preserves framework patient changes", async () => {
+    const { patientContextApiPath } = await import("./app-template");
+
+    expect(patientContextApiPath("app-007")).toBe("/api/apps/app-007/patient-context");
+    expect(patientContextApiPath("app-007", "5")).toBe("/api/apps/app-007/patient-context?updatedPatient=5");
+  });
 });

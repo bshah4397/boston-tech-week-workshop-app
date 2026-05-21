@@ -169,6 +169,7 @@ function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: s
         <footer className="slot-footer">
           <a href={`/api/apps/${slotId}/smart/launch`}>SMART launch API</a>
           <a href={`/api/apps/${slotId}/smart/callback`}>SMART callback API</a>
+          <a href={patientContextApiPath(slotId)}>Patient context API</a>
           <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
         </footer>
       </section>
@@ -204,4 +205,11 @@ function AppError({ appBasePath }: { appBasePath: string }) {
       </section>
     </main>
   );
+}
+
+export function patientContextApiPath(slotId: string, updatedPatient?: string) {
+  if (!updatedPatient) return `/api/apps/${slotId}/patient-context`;
+
+  const query = new URLSearchParams({ updatedPatient });
+  return `/api/apps/${slotId}/patient-context?${query}`;
 }

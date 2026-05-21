@@ -211,7 +211,7 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/apps/app-101/patient-context",
+      "/api/apps/app-101/patient-context?updatedPatient=patient-789",
       expect.objectContaining({
         credentials: "include",
         headers: { Accept: "application/json" },
@@ -291,7 +291,7 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/apps/app-101/patient-context",
+      "/api/apps/app-101/patient-context?updatedPatient=5",
       expect.objectContaining({
         credentials: "include",
         headers: { Accept: "application/json" },

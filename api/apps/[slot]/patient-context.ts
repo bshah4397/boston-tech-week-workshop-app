@@ -1,5 +1,5 @@
 import { decryptCookieValue, readCookie, sessionCookieName } from "../../_lib/cookies.js";
-import { sendJson, type ApiRequest, type ApiResponse } from "../../_lib/http.js";
+import { getRequestUrl, sendJson, type ApiRequest, type ApiResponse } from "../../_lib/http.js";
 import { getSlotId, isValidSlotId } from "../../_lib/slot-config.js";
 import type { SanitizedSmartSession, SmartSession } from "../../_lib/types";
 
@@ -30,7 +30,10 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
     return;
   }
 
-  const patientUrl = `${session.serverUrl.replace(/\/$/, "")}/Patient/${encodeURIComponent(session.patientId)}`;
+  const requestUrl = getRequestUrl(req);
+  const requestedPatient = requestUrl.searchParams.get("updatedPatient") ?? requestUrl.searchParams.get("patientId");
+  const patientId = patientIdForContextReload(session.patientId, requestedPatient);
+  const patientUrl = `${session.serverUrl.replace(/\/$/, "")}/Patient/${encodeURIComponent(patientId)}`;
   const fhirResponse = await fetch(patientUrl, {
     headers: {
       Accept: "application/fhir+json, application/json",
@@ -62,11 +65,22 @@ export default async function handler(req: ApiRequest, res: ApiResponse): Promis
   sendJson(res, 200, {
     fhirUser: session.fhirUser ?? null,
     patient: body,
-    patientId: session.patientId,
+    patientId,
+    requestedPatient: requestedPatient ?? null,
     scope: session.scope,
     serverUrl: session.serverUrl,
     source: "smart",
   });
+}
+
+function patientIdForContextReload(sessionPatientId: string, requestedPatient: string | null): string {
+  if (!requestedPatient) return sessionPatientId;
+  if (!/^\d+$/.test(requestedPatient)) return requestedPatient;
+
+  const athenaFhirId = sessionPatientId.match(/^(a-\d+\.E-)\d+$/);
+  if (!athenaFhirId) return requestedPatient;
+
+  return `${athenaFhirId[1]}${requestedPatient}`;
 }
 
 function sanitizeSession(session: SmartSession): SanitizedSmartSession {

@@ -115,7 +115,7 @@ function PatientContextScreen({ appBasePath, slotId }: { appBasePath: string; sl
 
     async function loadPatientContext() {
       try {
-        const response = await fetch(`/api/apps/${slotId}/patient-context`, {
+        const response = await fetch(patientContextApiPath(slotId), {
           credentials: "include",
           headers: { Accept: "application/json" },
         });
@@ -316,9 +316,9 @@ function VisitPrepSidecar({
   useEffect(() => {
     let isCurrent = true;
 
-    async function reloadPatientIdentity() {
+    async function reloadPatientIdentity(updatedPatient?: string) {
       try {
-        const response = await fetch(`/api/apps/${slotId}/patient-context`, {
+        const response = await fetch(patientContextApiPath(slotId, updatedPatient), {
           credentials: "include",
           headers: { Accept: "application/json" },
         });
@@ -350,8 +350,9 @@ function VisitPrepSidecar({
       setSelectedPrepGap(null);
       setReminderState(null);
 
-      if (patientIdentifierFromMessage(event.data)) {
-        void reloadPatientIdentity();
+      const updatedPatient = patientIdentifierFromMessage(event.data);
+      if (updatedPatient) {
+        void reloadPatientIdentity(updatedPatient);
       }
     }
 
@@ -615,6 +616,13 @@ function AppError({ appBasePath, slotId }: { appBasePath: string; slotId: string
 function slotApiPath(slotId: string, path: "patient-context" | "smart/callback" | "smart/launch", query?: URLSearchParams) {
   const search = query?.toString();
   return `/api/apps/${slotId}/${path}${search ? `?${search}` : ""}`;
+}
+
+function patientContextApiPath(slotId: string, updatedPatient?: string) {
+  if (!updatedPatient) return slotApiPath(slotId, "patient-context");
+
+  const query = new URLSearchParams({ updatedPatient });
+  return slotApiPath(slotId, "patient-context", query);
 }
 
 async function readJson(response: Response) {
