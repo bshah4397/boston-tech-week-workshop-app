@@ -33,6 +33,10 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByText("app-101 / local demo")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Visit Prep Sidecar" })).toBeInTheDocument();
     expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Referral follow-up" })).toBeInTheDocument();
+    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
     expect(screen.getByRole("link", { name: "SMART launch API" })).toHaveAttribute("href", "/api/apps/app-101/smart/launch");
     expect(screen.getByRole("link", { name: "SMART callback API" })).toHaveAttribute("href", "/api/apps/app-101/smart/callback");
     expect(screen.getByRole("link", { name: "Logout redirect" })).toHaveAttribute("href", "/app-101/logout-complete");
@@ -106,10 +110,15 @@ describe("app-101 SMART patient states", () => {
     renderSlot("home", new URLSearchParams("smart=1"));
 
     expect(await screen.findByText("Patient Loaded")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visit Prep Sidecar" })).toBeInTheDocument();
     expect(screen.getByText("Jamie Chen")).toBeInTheDocument();
     expect(screen.getByText("DOB 1980-02-03")).toBeInTheDocument();
     expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument();
     expect(screen.getByText("nonbinary")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Referral follow-up" })).toBeInTheDocument();
+    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
 
     const details = screen.getByText("Developer details").closest("details");
     expect(details).not.toBeNull();

@@ -48,18 +48,18 @@ const demoPatient: PatientProfile = {
 
 const prepCards = [
   {
+    activeCareGap: true,
     label: "Vitals review due",
-    tone: "active",
     text: "Last BP is elevated. Open details before closing the encounter.",
   },
   {
+    activeCareGap: false,
     label: "Medication reconciliation",
-    tone: "default",
     text: "Confirm adherence and update discontinued medications.",
   },
   {
+    activeCareGap: false,
     label: "Referral follow-up",
-    tone: "default",
     text: "Check whether cardiology referral has been scheduled.",
   },
 ];
@@ -314,7 +314,8 @@ function VisitPrepSidecar({
 
         <section className="prep-list" aria-label="Visit prep cards">
           {prepCards.map((card) => (
-            <article className={`prep-card ${card.tone}`} key={card.label}>
+            <article className={`prep-card ${card.activeCareGap ? "active" : "default"}`} key={card.label}>
+              {card.activeCareGap ? <span className="slot-kicker">Active care gap</span> : null}
               <h2>{card.label}</h2>
               <p>{card.text}</p>
             </article>
