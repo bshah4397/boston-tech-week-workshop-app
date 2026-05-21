@@ -1,17 +1,21 @@
+const embeddedAppMessageVersion = "1.0.0" as const;
+
+type EmbeddedAppMethod = "appClearBadge" | "appMinimize" | "appReopen" | "appResize" | "appShowBadgePersistent";
+
 type EmbeddedAppMessage = {
-  method: string;
-  methodVersion: "1.0.0";
+  method: EmbeddedAppMethod;
+  methodVersion: typeof embeddedAppMessageVersion;
   newWidth?: string;
   type: "embeddedAppAPIMessage";
 };
 
 type EmbeddedAppPayload = Omit<EmbeddedAppMessage, "method" | "methodVersion" | "type">;
 
-export function sendEmbeddedAppMessage(method: string, payload: EmbeddedAppPayload = {}) {
+export function sendEmbeddedAppMessage(method: EmbeddedAppMethod, payload: EmbeddedAppPayload = {}) {
   const message: EmbeddedAppMessage = {
     type: "embeddedAppAPIMessage",
     method,
-    methodVersion: "1.0.0",
+    methodVersion: embeddedAppMessageVersion,
     ...payload,
   };
 

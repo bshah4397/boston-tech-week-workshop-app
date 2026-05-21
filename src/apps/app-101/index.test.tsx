@@ -80,14 +80,14 @@ describe("app-101 Visit Prep sidecar", () => {
         type: "embeddedAppAPIMessage",
         method: "appResize",
         methodVersion: "1.0.0",
-        newWidth: "600",
+        newWidth: "800",
       },
       "*",
     );
-    expect(screen.getByRole("heading", { name: "Review details" })).toBeInTheDocument();
-    expect(screen.getByText("Rationale")).toBeInTheDocument();
-    expect(screen.getByText("Next steps")).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Medication reconciliation" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Review details" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Elevated blood pressure needs follow-up" })).toBeInTheDocument();
+    expect(screen.getByText("Open latest vitals trend")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Collapse details" }));
 
@@ -100,7 +100,7 @@ describe("app-101 Visit Prep sidecar", () => {
       },
       "*",
     );
-    expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Review details" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
   });
 
@@ -143,7 +143,7 @@ describe("app-101 Visit Prep sidecar", () => {
     render(<App101 {...baseProps} fullPath="/app-101/launch" route="launch" />);
 
     expect(screen.getByRole("heading", { name: "Setup Required" })).toBeInTheDocument();
-    expect(screen.getByText("Setup required")).toBeInTheDocument();
+    expect(screen.getByText("app-101 / setup")).toBeInTheDocument();
     expect(screen.getByText("/api/apps/app-101/smart/launch")).toBeInTheDocument();
   });
 
@@ -154,7 +154,7 @@ describe("app-101 Visit Prep sidecar", () => {
 
     const link = screen.getByRole("link", { name: "Continue SMART launch" });
     expect(screen.getByRole("heading", { name: "Launch In Progress" })).toBeInTheDocument();
-    expect(screen.getByText("Launch in progress")).toBeInTheDocument();
+    expect(screen.getByText("app-101 / SMART launch")).toBeInTheDocument();
     expect(link).toHaveAttribute(
       "href",
       "/api/apps/app-101/smart/launch?iss=https%3A%2F%2Ffhir.example%2Fr4&launch=launch-123",
@@ -171,7 +171,8 @@ describe("app-101 Visit Prep sidecar", () => {
     render(<App101 {...baseProps} fullPath="/app-101/callback" query={query} route="callback" />);
 
     expect(screen.getByRole("heading", { name: "Callback Received" })).toBeInTheDocument();
-    expect(screen.getByText("Callback received")).toBeInTheDocument();
+    expect(screen.getByText("app-101 / SMART callback")).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: /callback loading patient context/i })).toBeInTheDocument();
     expect(screen.getByText("/api/apps/app-101/smart/callback")).toBeInTheDocument();
     expect(screen.queryByText("secret-auth-code")).not.toBeInTheDocument();
     expect(screen.queryByText("pkce-secret")).not.toBeInTheDocument();
@@ -186,9 +187,12 @@ describe("app-101 Visit Prep sidecar", () => {
 
     render(<App101 {...baseProps} fullPath="/app-101" query={new URLSearchParams({ smart: "1" })} route="home" />);
 
-    expect(screen.getByRole("heading", { name: "Callback Received" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Patient Context Loading" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument());
-    expect(fetch).toHaveBeenCalledWith("/api/apps/app-101/patient-context", expect.objectContaining({ method: "GET" }));
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/apps/app-101/patient-context",
+      expect.objectContaining({ credentials: "include", method: "GET" }),
+    );
     expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
     expect(screen.getByText("DOB 1975-04-12")).toBeInTheDocument();
     expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument();
@@ -216,7 +220,10 @@ describe("app-101 Visit Prep sidecar", () => {
     const unrelatedMessage = { event: "notPatientContextChanged", updatedPatient: "5" };
     window.dispatchEvent(new MessageEvent("message", { data: unrelatedMessage }));
 
-    expect(consoleLog).toHaveBeenCalledWith("[app-101] received window message", unrelatedMessage);
+    expect(consoleLog).toHaveBeenCalledWith("[app-101] received window message", {
+      data: unrelatedMessage,
+      origin: "",
+    });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
@@ -281,11 +288,11 @@ describe("app-101 Visit Prep sidecar", () => {
   });
 
   it("shows patient load failed when patient context cannot be read", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "No active SMART session." }, { status: 401 })));
+    vi.stubGlobal("fetch", vi.fn(async () => Response.json({ error: "FHIR Patient read failed." }, { status: 502 })));
 
     render(<App101 {...baseProps} fullPath="/app-101" route="home" />);
 
-    await waitFor(() => expect(screen.getByText("Patient load failed")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole("heading", { name: "Patient Load Failed" })).toBeInTheDocument());
     expect(screen.getByText("Open local demo mode")).toHaveAttribute("href", "/app-101/demo");
   });
 

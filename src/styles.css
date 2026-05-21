@@ -379,6 +379,16 @@ a {
   grid-template-columns: minmax(0, 0.92fr) minmax(260px, 1.25fr);
 }
 
+.sidecar-placeholder {
+  background: #f8fbfd;
+  border: 1px dashed #bfd2df;
+  border-radius: 8px;
+  color: #52697b;
+  line-height: 1.45;
+  margin: 16px 0 0;
+  padding: 14px;
+}
+
 .prep-list {
   display: grid;
   gap: 12px;

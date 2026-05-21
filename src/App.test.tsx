@@ -44,7 +44,7 @@ describe("app host", () => {
     expect(screen.getByRole("heading", { name: /logout complete/i })).toBeInTheDocument();
   });
 
-  it("renders the template as a minimal neutral starting app", () => {
+  it("renders the template as a staged starting app before cards are enabled", () => {
     render(
       <TemplateApp
         appBasePath="/app-007"
@@ -57,8 +57,9 @@ describe("app host", () => {
 
     expect(screen.getByText("Local Demo")).toBeInTheDocument();
     expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.getByText("Visit prep cards are enabled in the next workshop step.")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Vitals review due" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Medication reconciliation" })).not.toBeInTheDocument();
     expect(screen.queryByText(/active care gap/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "SMART launch API" })).not.toBeInTheDocument();
@@ -72,14 +73,14 @@ describe("app host", () => {
       value: { postMessage },
     });
 
-    const message = sendEmbeddedAppMessage("appResize", { newWidth: "600" });
+    const message = sendEmbeddedAppMessage("appResize", { newWidth: "800" });
 
     expect(postMessage).toHaveBeenCalledWith(
       {
         type: "embeddedAppAPIMessage",
         method: "appResize",
         methodVersion: "1.0.0",
-        newWidth: "600",
+        newWidth: "800",
       },
       "*",
     );
