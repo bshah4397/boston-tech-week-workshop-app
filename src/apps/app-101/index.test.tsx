@@ -118,6 +118,58 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByText("Vitals review due remains ready for follow-up.")).toBeInTheDocument();
   });
 
+  it("reopens the saved reminder and returns to active gap details", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+    await user.click(screen.getByRole("button", { name: "Snooze while I update Athena" }));
+
+    expect(screen.getByRole("region", { name: "Reminder state" })).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
+
+    postMessage.mockClear();
+    await user.click(screen.getByRole("button", { name: "Bring prep back" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appReopen",
+        methodVersion: "1.0.0",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
+    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+  });
+
+  it("clears the badge and returns to compact Visit Prep mode when marked reviewed", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
+
+    postMessage.mockClear();
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appClearBadge",
+        methodVersion: "1.0.0",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
+    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+  });
+
   it("shows setup required when no SMART patient context is available", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ accessToken: "server-token", error: "No active SMART session." }, 401));
     vi.stubGlobal("fetch", fetchMock);

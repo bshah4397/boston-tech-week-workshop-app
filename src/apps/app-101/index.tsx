@@ -302,7 +302,7 @@ function VisitPrepSidecar({
 }) {
   const activePrepGap = prepCards.find((card) => card.activeCareGap);
   const [selectedPrepGap, setSelectedPrepGap] = useState<(typeof prepCards)[number] | null>(null);
-  const [reminderState, setReminderState] = useState<{ gapLabel: string; status: "snoozed-athena-update" } | null>(null);
+  const [reminderState, setReminderState] = useState<{ gap: (typeof prepCards)[number]; status: "snoozed-athena-update" } | null>(null);
 
   function reviewActivePrepGap() {
     if (!activePrepGap) return;
@@ -314,8 +314,24 @@ function VisitPrepSidecar({
   function snoozeForAthenaUpdate() {
     if (!selectedPrepGap) return;
 
-    setReminderState({ gapLabel: selectedPrepGap.label, status: "snoozed-athena-update" });
+    setReminderState({ gap: selectedPrepGap, status: "snoozed-athena-update" });
+    setSelectedPrepGap(null);
     sendEmbeddedAppMessage("appMinimize");
+  }
+
+  function bringPrepBack() {
+    sendEmbeddedAppMessage("appReopen");
+
+    if (reminderState) {
+      setSelectedPrepGap(reminderState.gap);
+      setReminderState(null);
+    }
+  }
+
+  function markReviewed() {
+    sendEmbeddedAppMessage("appClearBadge");
+    setReminderState(null);
+    setSelectedPrepGap(null);
   }
 
   return (
@@ -352,17 +368,20 @@ function VisitPrepSidecar({
                 <li key={step}>{step}</li>
               ))}
             </ul>
-            {reminderState?.status === "snoozed-athena-update" ? (
-              <div aria-live="polite">
-                <p>Reminder saved while Athena is updated.</p>
-                <p>{reminderState.gapLabel} remains ready for follow-up.</p>
-              </div>
-            ) : null}
             <div className="action-grid">
               <button type="button" onClick={snoozeForAthenaUpdate}>
                 <Minimize2 aria-hidden="true" size={16} />
                 Snooze while I update Athena
               </button>
+            </div>
+          </section>
+        ) : reminderState ? (
+          <section className="prep-card active" aria-label="Reminder state">
+            <span className="slot-kicker">Reminder pending</span>
+            <h2>{reminderState.gap.label}</h2>
+            <div aria-live="polite">
+              <p>Reminder saved while Athena is updated.</p>
+              <p>{reminderState.gap.label} remains ready for follow-up.</p>
             </div>
           </section>
         ) : (
@@ -392,11 +411,11 @@ function VisitPrepSidecar({
             <Minimize2 aria-hidden="true" size={16} />
             Snooze
           </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appReopen")}>
+          <button type="button" onClick={bringPrepBack}>
             <RotateCcw aria-hidden="true" size={16} />
             Bring prep back
           </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appClearBadge")}>
+          <button type="button" onClick={markReviewed}>
             <CheckCircle2 aria-hidden="true" size={16} />
             Mark reviewed
           </button>
