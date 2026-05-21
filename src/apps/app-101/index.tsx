@@ -290,6 +290,8 @@ function VisitPrepSidecar({
   slotId: string;
   statusLabel: string;
 }) {
+  const activePrepGap = prepCards.find((card) => card.activeCareGap);
+
   return (
     <main className="sidecar-shell">
       <section className="sidecar-card" aria-labelledby="sidecar-title">
@@ -322,11 +324,13 @@ function VisitPrepSidecar({
           ))}
         </section>
 
-        <section className="action-grid" aria-label="PostMessage demo actions">
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appShowBadgePersistent")}>
-            <Bell aria-hidden="true" size={16} />
-            Flag for review
-          </button>
+        <section className="action-grid" aria-label="Clinical actions">
+          {activePrepGap ? (
+            <button type="button" onClick={() => sendEmbeddedAppMessage("appShowBadgePersistent")}>
+              <Bell aria-hidden="true" size={16} />
+              Flag for review
+            </button>
+          ) : null}
           <button type="button" onClick={() => sendEmbeddedAppMessage("appResize", { newWidth: "600" })}>
             <ChevronsRight aria-hidden="true" size={16} />
             Review details

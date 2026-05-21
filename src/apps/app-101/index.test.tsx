@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App101 from "./index";
 
@@ -40,6 +41,29 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByRole("link", { name: "SMART launch API" })).toHaveAttribute("href", "/api/apps/app-101/smart/launch");
     expect(screen.getByRole("link", { name: "SMART callback API" })).toHaveAttribute("href", "/api/apps/app-101/smart/callback");
     expect(screen.getByRole("link", { name: "Logout redirect" })).toHaveAttribute("href", "/app-101/logout-complete");
+  });
+
+  it("sends a persistent review badge message from the active care gap clinical action", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
+
+    const clinicalActions = screen.getByRole("region", { name: "Clinical actions" });
+    expect(clinicalActions).not.toHaveTextContent("appShowBadgePersistent");
+
+    await user.click(within(clinicalActions).getByRole("button", { name: "Flag for review" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appShowBadgePersistent",
+        methodVersion: "1.0.0",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
   });
 
   it("shows setup required when no SMART patient context is available", async () => {
