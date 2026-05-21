@@ -238,6 +238,13 @@ function VisitPrepDemo({
   stateLabel?: string;
 }) {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [isVitalsReviewed, setIsVitalsReviewed] = useState(false);
+
+  useEffect(() => {
+    if (!isVitalsReviewed) {
+      sendEmbeddedAppMessage("appShowBadgePersistent");
+    }
+  }, [isVitalsReviewed]);
 
   function openDetails() {
     sendEmbeddedAppMessage("appResize", { newWidth: "600" });
@@ -246,6 +253,13 @@ function VisitPrepDemo({
 
   function collapseDetails() {
     sendEmbeddedAppMessage("appResize", { newWidth: "400" });
+    setIsDetailOpen(false);
+  }
+
+  function markReviewed() {
+    sendEmbeddedAppMessage("appClearBadge");
+    sendEmbeddedAppMessage("appResize", { newWidth: "400" });
+    setIsVitalsReviewed(true);
     setIsDetailOpen(false);
   }
 
@@ -262,23 +276,32 @@ function VisitPrepDemo({
 
         <PatientBanner patientSummary={patientSummary} />
 
-        {isDetailOpen ? <VitalsDetailPanel onCollapse={collapseDetails} /> : <PrepCardList onOpenDetails={openDetails} />}
+        {isDetailOpen ? (
+          <VitalsDetailPanel onCollapse={collapseDetails} onMarkReviewed={markReviewed} />
+        ) : (
+          <PrepCardList isVitalsReviewed={isVitalsReviewed} onOpenDetails={openDetails} />
+        )}
       </section>
     </main>
   );
 }
 
-function PrepCardList({ onOpenDetails }: { onOpenDetails: () => void }) {
+function PrepCardList({ isVitalsReviewed, onOpenDetails }: { isVitalsReviewed: boolean; onOpenDetails: () => void }) {
   return (
     <section className="prep-list" aria-label="Visit prep cards">
       {prepCards.map((card) => (
         <article className={`prep-card ${card.tone}`} key={card.label}>
+          {card.label === "Vitals review due" && !isVitalsReviewed ? <StatusDot /> : null}
           <h2>{card.label}</h2>
           <p>{card.text}</p>
           {card.label === "Vitals review due" ? (
-            <button className="slot-primary-action" onClick={onOpenDetails} type="button">
-              Open details
-            </button>
+            isVitalsReviewed ? (
+              <span>Reviewed</span>
+            ) : (
+              <button className="slot-primary-action" onClick={onOpenDetails} type="button">
+                Open details
+              </button>
+            )
           ) : null}
         </article>
       ))}
@@ -286,7 +309,24 @@ function PrepCardList({ onOpenDetails }: { onOpenDetails: () => void }) {
   );
 }
 
-function VitalsDetailPanel({ onCollapse }: { onCollapse: () => void }) {
+function StatusDot() {
+  return (
+    <span
+      aria-label="Needs review"
+      style={{
+        backgroundColor: "#d92d20",
+        borderRadius: "50%",
+        display: "inline-block",
+        height: "0.5rem",
+        marginRight: "0.5rem",
+        verticalAlign: "middle",
+        width: "0.5rem",
+      }}
+    />
+  );
+}
+
+function VitalsDetailPanel({ onCollapse, onMarkReviewed }: { onCollapse: () => void; onMarkReviewed: () => void }) {
   return (
     <section className="prep-list" aria-label="Review details panel">
       <article className="prep-card default">
@@ -295,6 +335,9 @@ function VitalsDetailPanel({ onCollapse }: { onCollapse: () => void }) {
         <p>Vitals are ready to compare with the current visit context before the encounter continues.</p>
         <h3>Next steps</h3>
         <p>Review the latest values, confirm whether follow-up is needed, then return to the compact prep list.</p>
+        <button className="slot-primary-action" onClick={onMarkReviewed} type="button">
+          Mark reviewed
+        </button>
         <button className="slot-primary-action" onClick={onCollapse} type="button">
           Collapse details
         </button>

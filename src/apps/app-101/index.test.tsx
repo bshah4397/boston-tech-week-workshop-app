@@ -25,6 +25,27 @@ describe("app-101 Visit Prep sidecar", () => {
     expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
     expect(screen.getByText("Latest vitals are available for review before the encounter.")).toBeInTheDocument();
     expect(screen.getByText("Medication list is ready for routine reconciliation.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /flag for review/i })).not.toBeInTheDocument();
+  });
+
+  it("shows a persistent badge and red dot when vitals review is due", () => {
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage },
+    });
+
+    render(<App101 {...baseProps} />);
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appShowBadgePersistent",
+        methodVersion: "1.0.0",
+      },
+      "*",
+    );
+    expect(screen.getByLabelText("Needs review")).toBeInTheDocument();
   });
 
   it("opens and collapses vitals details with appResize messages", async () => {
@@ -66,6 +87,41 @@ describe("app-101 Visit Prep sidecar", () => {
     );
     expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+  });
+
+  it("marks vitals reviewed, clears the badge, resizes compact, and shows Reviewed", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage },
+    });
+
+    render(<App101 {...baseProps} />);
+
+    await user.click(screen.getByRole("button", { name: "Open details" }));
+    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appClearBadge",
+        methodVersion: "1.0.0",
+      },
+      "*",
+    );
+    expect(postMessage).toHaveBeenLastCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appResize",
+        methodVersion: "1.0.0",
+        newWidth: "400",
+      },
+      "*",
+    );
+    expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
+    expect(screen.getByText("Reviewed")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Needs review")).not.toBeInTheDocument();
   });
 
   it("shows setup required when launch parameters are missing", () => {
