@@ -1,7 +1,7 @@
-import { clearCookie, createSessionCookie, decryptCookieValue, launchCookieName, readCookie, sessionCookieName } from "../../../_lib/cookies";
-import { decodeJwtPayload } from "../../../_lib/crypto";
-import { getRequestUrl, isHttpsRequest, sendJson, sendSetupRequired, type ApiRequest, type ApiResponse } from "../../../_lib/http";
-import { getSlotClientId, getSlotId, isValidSlotId } from "../../../_lib/slot-config";
+import { clearCookie, createSessionCookie, decryptCookieValue, launchCookieName, readCookie, sessionCookieName } from "../../../_lib/cookies.js";
+import { decodeJwtPayload } from "../../../_lib/crypto.js";
+import { getRequestUrl, isHttpsRequest, sendJson, sendSetupRequired, type ApiRequest, type ApiResponse } from "../../../_lib/http.js";
+import { getSlotClientId, getSlotId, isValidSlotId } from "../../../_lib/slot-config.js";
 import type { LaunchTransaction, SmartSession } from "../../../_lib/types";
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {

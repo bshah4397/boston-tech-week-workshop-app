@@ -1,6 +1,6 @@
-import { decryptCookieValue, readCookie, sessionCookieName } from "../../_lib/cookies";
-import { sendJson, type ApiRequest, type ApiResponse } from "../../_lib/http";
-import { getSlotId, isValidSlotId } from "../../_lib/slot-config";
+import { decryptCookieValue, readCookie, sessionCookieName } from "../../_lib/cookies.js";
+import { sendJson, type ApiRequest, type ApiResponse } from "../../_lib/http.js";
+import { getSlotId, isValidSlotId } from "../../_lib/slot-config.js";
 import type { SanitizedSmartSession, SmartSession } from "../../_lib/types";
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {

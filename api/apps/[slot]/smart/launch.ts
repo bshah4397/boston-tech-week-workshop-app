@@ -1,8 +1,8 @@
-import { launchCookieName, createSessionCookie } from "../../../_lib/cookies";
-import { pkceChallenge, randomBase64Url } from "../../../_lib/crypto";
-import { getRequestUrl, isHttpsRequest, sendJson, sendSetupRequired, type ApiRequest, type ApiResponse } from "../../../_lib/http";
-import { buildAuthorizeUrl, discoverSmartEndpoints } from "../../../_lib/oauth";
-import { getSlotClientId, getSlotId, isValidSlotId, SMART_SCOPES } from "../../../_lib/slot-config";
+import { launchCookieName, createSessionCookie } from "../../../_lib/cookies.js";
+import { pkceChallenge, randomBase64Url } from "../../../_lib/crypto.js";
+import { getRequestUrl, isHttpsRequest, sendJson, sendSetupRequired, type ApiRequest, type ApiResponse } from "../../../_lib/http.js";
+import { buildAuthorizeUrl, discoverSmartEndpoints } from "../../../_lib/oauth.js";
+import { getSlotClientId, getSlotId, isValidSlotId, SMART_SCOPES } from "../../../_lib/slot-config.js";
 import type { LaunchTransaction } from "../../../_lib/types";
 
 export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {

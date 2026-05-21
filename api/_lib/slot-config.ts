@@ -1,5 +1,5 @@
 import type { ApiRequest } from "./http";
-import { WORKSHOP_SLOT_CLIENT_IDS } from "./workshop-config";
+import { WORKSHOP_SLOT_CLIENT_IDS } from "./workshop-config.js";
 
 export const SMART_SCOPES = "launch patient/Patient.r user/Patient.r openid fhirUser";
 export const ATHENA_AUTHORIZATION_URL = "https://api.preview.platform.athenahealth.com/oauth2/v1/authorize";

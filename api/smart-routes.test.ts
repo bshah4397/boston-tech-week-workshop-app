@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import callbackHandler from "./apps/[slot]/smart/callback";
 import launchHandler from "./apps/[slot]/smart/launch";
@@ -13,6 +15,33 @@ function resetWorkshopClientIds() {
     delete WORKSHOP_SLOT_CLIENT_IDS[slotId];
   }
 }
+
+function getRuntimeApiFiles(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return getRuntimeApiFiles(path);
+    if (!entry.name.endsWith(".ts")) return [];
+    if (entry.name.endsWith(".test.ts") || entry.name === "test-helpers.ts") return [];
+    return [path];
+  });
+}
+
+describe("Vercel API module format", () => {
+  it("uses Node ESM-compatible .js specifiers for runtime relative imports", () => {
+    const apiDir = join(process.cwd(), "api");
+    const extensionlessImports = getRuntimeApiFiles(apiDir).flatMap((filePath) => {
+      const source = readFileSync(filePath, "utf8");
+      const matches = [...source.matchAll(/^\s*import(?!\s+type\b)[^'"]+from\s+["'](\.{1,2}\/[^"']+)["'];?/gm)];
+
+      return matches
+        .map((match) => match[1])
+        .filter((specifier) => !specifier.endsWith(".js"))
+        .map((specifier) => `${relative(apiDir, filePath)} -> ${specifier}`);
+    });
+
+    expect(extensionlessImports).toEqual([]);
+  });
+});
 
 describe("slot SMART registration URLs", () => {
   it("builds the athenaOne registration URLs for a single slot", () => {

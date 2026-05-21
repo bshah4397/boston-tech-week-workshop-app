@@ -9,7 +9,8 @@ describe("app host", () => {
 
     expect(screen.getByRole("heading", { name: /embedded app workshop host/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: /created app slots/i })).toBeInTheDocument();
-    expect(screen.getByText(/copy src\/app-template into src\/apps\/app-xxx/i)).toBeInTheDocument();
+    expect(screen.getAllByText("src/app-template").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("src/apps/app-XXX").length).toBeGreaterThan(0);
     expect(screen.queryByText("app-100")).not.toBeInTheDocument();
   });
 

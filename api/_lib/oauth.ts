@@ -1,4 +1,4 @@
-import { ATHENA_AUTHORIZATION_URL, ATHENA_TOKEN_URL } from "./slot-config";
+import { ATHENA_AUTHORIZATION_URL, ATHENA_TOKEN_URL } from "./slot-config.js";
 
 export type SmartEndpoints = {
   authorizationEndpoint: string;
