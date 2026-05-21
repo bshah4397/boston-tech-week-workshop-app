@@ -32,12 +32,12 @@ const prepCards = [
   {
     label: "Vitals review due",
     tone: "default",
-    text: "Last BP is elevated. Open details before closing the encounter.",
+    text: "Latest vitals are available for review before the encounter.",
   },
   {
     label: "Medication reconciliation",
     tone: "default",
-    text: "Confirm adherence and update discontinued medications.",
+    text: "Medication list is ready for routine reconciliation.",
   },
 ];
 
@@ -59,7 +59,7 @@ export default function TemplateApp({ appBasePath, query, route, slotId }: SlotA
   }
 
   if (route === "demo") {
-    return <VisitPrepDemo slotId={slotId} />;
+    return <VisitPrepDemo slotId={slotId} stateLabel="Local Demo" />;
   }
 
   return <SmartVisitPrep appBasePath={appBasePath} query={query} slotId={slotId} />;
@@ -196,7 +196,7 @@ function SmartVisitPrep({ appBasePath, query, slotId }: { appBasePath: string; q
   }, [slotId]);
 
   if (state === "patient loaded" && patientSummary) {
-    return <VisitPrepDemo patientSummary={patientSummary} slotId={slotId} stateLabel="Patient loaded" />;
+    return <VisitPrepDemo patientSummary={patientSummary} slotId={slotId} />;
   }
 
   return (
@@ -230,7 +230,7 @@ function SmartVisitPrep({ appBasePath, query, slotId }: { appBasePath: string; q
 function VisitPrepDemo({
   patientSummary = patient,
   slotId,
-  stateLabel = "Local Demo",
+  stateLabel,
 }: {
   patientSummary?: PatientSummary;
   slotId: string;
@@ -244,7 +244,7 @@ function VisitPrepDemo({
             <p className="slot-kicker">{slotId}</p>
             <h1 id="sidecar-title">Visit Prep</h1>
           </div>
-          <span>{stateLabel}</span>
+          {stateLabel ? <span>{stateLabel}</span> : null}
         </header>
 
         <PatientBanner patientSummary={patientSummary} />

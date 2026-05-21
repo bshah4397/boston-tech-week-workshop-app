@@ -22,6 +22,8 @@ describe("app-101 Visit Prep sidecar", () => {
     expect(screen.getByText("Local Demo")).toBeInTheDocument();
     expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByText("Latest vitals are available for review before the encounter.")).toBeInTheDocument();
+    expect(screen.getByText("Medication list is ready for routine reconciliation.")).toBeInTheDocument();
   });
 
   it("shows setup required when launch parameters are missing", () => {
@@ -83,12 +85,21 @@ describe("app-101 Visit Prep sidecar", () => {
     render(<App101 {...baseProps} fullPath="/app-101" query={new URLSearchParams({ smart: "1" })} route="home" />);
 
     expect(screen.getByRole("heading", { name: "Callback Received" })).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText("Patient loaded")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument());
     expect(fetch).toHaveBeenCalledWith("/api/apps/app-101/patient-context", expect.objectContaining({ method: "GET" }));
     expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
     expect(screen.getByText("DOB 1975-04-12")).toBeInTheDocument();
     expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument();
     expect(screen.getByText("female")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.getByText("Latest vitals are available for review before the encounter.")).toBeInTheDocument();
+    expect(screen.getByText("Medication list is ready for routine reconciliation.")).toBeInTheDocument();
+    expect(screen.queryByText("Patient loaded")).not.toBeInTheDocument();
+    expect(screen.queryByText(/elevated/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/badge/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/resize/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/highlight/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/bearer/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/authorization/i)).not.toBeInTheDocument();
   });
