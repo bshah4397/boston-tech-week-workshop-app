@@ -66,6 +66,34 @@ describe("app-101 SMART patient states", () => {
     );
   });
 
+  it("resizes the launcher and shows active gap details when reviewing details", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appResize",
+        methodVersion: "1.0.0",
+        newWidth: "600",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
+    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rationale" })).toBeInTheDocument();
+    expect(screen.getByText("The most recent blood pressure is elevated and should be reviewed before the visit closes.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Next steps" })).toBeInTheDocument();
+    expect(screen.getByText("Open the latest vitals trend.")).toBeInTheDocument();
+    expect(screen.getByText("Confirm whether repeat blood pressure is needed.")).toBeInTheDocument();
+    expect(screen.getByText("Document follow-up plan before closing the encounter.")).toBeInTheDocument();
+  });
+
   it("shows setup required when no SMART patient context is available", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ accessToken: "server-token", error: "No active SMART session." }, 401));
     vi.stubGlobal("fetch", fetchMock);

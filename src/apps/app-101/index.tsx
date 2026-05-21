@@ -50,16 +50,26 @@ const prepCards = [
   {
     activeCareGap: true,
     label: "Vitals review due",
+    nextSteps: [
+      "Open the latest vitals trend.",
+      "Confirm whether repeat blood pressure is needed.",
+      "Document follow-up plan before closing the encounter.",
+    ],
+    rationale: "The most recent blood pressure is elevated and should be reviewed before the visit closes.",
     text: "Last BP is elevated. Open details before closing the encounter.",
   },
   {
     activeCareGap: false,
     label: "Medication reconciliation",
+    nextSteps: ["Review active medication list.", "Confirm discontinued medications."],
+    rationale: "Medication history may need cleanup before the encounter is signed.",
     text: "Confirm adherence and update discontinued medications.",
   },
   {
     activeCareGap: false,
     label: "Referral follow-up",
+    nextSteps: ["Check referral status.", "Confirm cardiology appointment timing."],
+    rationale: "Referral status should be checked while preparing for the visit.",
     text: "Check whether cardiology referral has been scheduled.",
   },
 ];
@@ -291,6 +301,14 @@ function VisitPrepSidecar({
   statusLabel: string;
 }) {
   const activePrepGap = prepCards.find((card) => card.activeCareGap);
+  const [selectedPrepGap, setSelectedPrepGap] = useState<(typeof prepCards)[number] | null>(null);
+
+  function reviewActivePrepGap() {
+    if (!activePrepGap) return;
+
+    sendEmbeddedAppMessage("appResize", { newWidth: "600" });
+    setSelectedPrepGap(activePrepGap);
+  }
 
   return (
     <main className="sidecar-shell">
@@ -314,15 +332,30 @@ function VisitPrepSidecar({
 
         {developerDetails}
 
-        <section className="prep-list" aria-label="Visit prep cards">
-          {prepCards.map((card) => (
-            <article className={`prep-card ${card.activeCareGap ? "active" : "default"}`} key={card.label}>
-              {card.activeCareGap ? <span className="slot-kicker">Active care gap</span> : null}
-              <h2>{card.label}</h2>
-              <p>{card.text}</p>
-            </article>
-          ))}
-        </section>
+        {selectedPrepGap ? (
+          <section className="prep-card active" aria-label="Active gap details">
+            <span className="slot-kicker">Active care gap</span>
+            <h2>{selectedPrepGap.label}</h2>
+            <h3>Rationale</h3>
+            <p>{selectedPrepGap.rationale}</p>
+            <h3>Next steps</h3>
+            <ul>
+              {selectedPrepGap.nextSteps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <section className="prep-list" aria-label="Visit prep cards">
+            {prepCards.map((card) => (
+              <article className={`prep-card ${card.activeCareGap ? "active" : "default"}`} key={card.label}>
+                {card.activeCareGap ? <span className="slot-kicker">Active care gap</span> : null}
+                <h2>{card.label}</h2>
+                <p>{card.text}</p>
+              </article>
+            ))}
+          </section>
+        )}
 
         <section className="action-grid" aria-label="Clinical actions">
           {activePrepGap ? (
@@ -331,7 +364,7 @@ function VisitPrepSidecar({
               Flag for review
             </button>
           ) : null}
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appResize", { newWidth: "600" })}>
+          <button type="button" onClick={reviewActivePrepGap}>
             <ChevronsRight aria-hidden="true" size={16} />
             Review details
           </button>
