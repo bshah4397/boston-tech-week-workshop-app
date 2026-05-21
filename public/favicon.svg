@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Boston Tech Week App Host">
+  <rect width="64" height="64" rx="14" fill="#12324a"/>
+  <path d="M14 18h36v10H14z" fill="#80d0c7"/>
+  <path d="M14 35h18v11H14zM38 35h12v11H38z" fill="#f8fbfd"/>
+</svg>
