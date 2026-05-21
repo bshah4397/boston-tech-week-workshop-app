@@ -219,6 +219,35 @@ describe("app-101 SMART patient states", () => {
     );
   });
 
+  it("writes every received window message to the browser console before filtering", () => {
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            method: "someUnsupportedMethod",
+            type: "embeddedAppAPIMessage",
+          },
+          origin: "https://preview.athenahealth.com",
+        }),
+      );
+    });
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[app-101] received window message",
+      expect.objectContaining({
+        data: {
+          method: "someUnsupportedMethod",
+          type: "embeddedAppAPIMessage",
+        },
+        origin: "https://preview.athenahealth.com",
+      }),
+    );
+  });
+
   it("reloads patient identity when the framework sends updatedPatient", async () => {
     const user = userEvent.setup();
     const fetchMock = vi.fn(async () =>

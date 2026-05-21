@@ -333,6 +333,11 @@ function VisitPrepSidecar({
     }
 
     function handleFrameworkMessage(event: MessageEvent) {
+      console.log("[app-101] received window message", {
+        data: event.data,
+        origin: event.origin,
+      });
+
       const eventName = frameworkEventName(event.data);
       if (!eventName) return;
 
