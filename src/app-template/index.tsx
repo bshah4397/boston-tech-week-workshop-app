@@ -1,6 +1,4 @@
-import { Bell, CheckCircle2, ChevronsRight, Minimize2, RotateCcw } from "lucide-react";
 import type { SlotAppProps, SlotConfig } from "../slot-types";
-import { sendEmbeddedAppMessage } from "./post-message";
 
 export const slotConfig: SlotConfig = {
   description: "Template source for participant workshop slots.",
@@ -18,18 +16,13 @@ const patient = {
 const prepCards = [
   {
     label: "Vitals review due",
-    tone: "active",
+    tone: "default",
     text: "Last BP is elevated. Open details before closing the encounter.",
   },
   {
     label: "Medication reconciliation",
     tone: "default",
     text: "Confirm adherence and update discontinued medications.",
-  },
-  {
-    label: "Referral follow-up",
-    tone: "default",
-    text: "Check whether cardiology referral has been scheduled.",
   },
 ];
 
@@ -50,7 +43,7 @@ export default function TemplateApp({ appBasePath, query, route, slotId }: SlotA
     return <AppError appBasePath={appBasePath} />;
   }
 
-  return <VisitPrepDemo appBasePath={appBasePath} slotId={slotId} />;
+  return <VisitPrepDemo slotId={slotId} />;
 }
 
 function LaunchScreen({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
@@ -115,23 +108,28 @@ function CallbackScreen({ appBasePath, query }: { appBasePath: string; query: UR
   );
 }
 
-function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
+function VisitPrepDemo({ slotId }: { slotId: string }) {
   return (
     <main className="sidecar-shell">
       <section className="sidecar-card" aria-labelledby="sidecar-title">
         <header className="sidecar-titlebar">
           <div>
-            <p className="slot-kicker">{slotId} / local demo</p>
-            <h1 id="sidecar-title">Visit Prep Sidecar</h1>
+            <p className="slot-kicker">{slotId}</p>
+            <h1 id="sidecar-title">Visit Prep</h1>
           </div>
-          <span>SMART</span>
+          <span>Local Demo</span>
         </header>
 
-        <section className="patient-strip" aria-label="Patient identity">
-          <strong>{patient.name}</strong>
-          <span>DOB {patient.dob}</span>
-          <span>FHIR ID {patient.fhirId}</span>
-          <span>{patient.gender}</span>
+        <section className="patient-banner" aria-label="Patient identity">
+          <span className="patient-avatar" aria-hidden="true">
+            AR
+          </span>
+          <div>
+            <strong>{patient.name}</strong>
+            <span>DOB {patient.dob}</span>
+            <span>FHIR ID {patient.fhirId}</span>
+            <span>{patient.gender}</span>
+          </div>
         </section>
 
         <section className="prep-list" aria-label="Visit prep cards">
@@ -142,36 +140,6 @@ function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: s
             </article>
           ))}
         </section>
-
-        <section className="action-grid" aria-label="PostMessage demo actions">
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appShowBadgePersistent")}>
-            <Bell aria-hidden="true" size={16} />
-            Flag for review
-          </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appResize", { newWidth: "600" })}>
-            <ChevronsRight aria-hidden="true" size={16} />
-            Review details
-          </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appMinimize")}>
-            <Minimize2 aria-hidden="true" size={16} />
-            Snooze
-          </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appReopen")}>
-            <RotateCcw aria-hidden="true" size={16} />
-            Bring prep back
-          </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appClearBadge")}>
-            <CheckCircle2 aria-hidden="true" size={16} />
-            Mark reviewed
-          </button>
-        </section>
-
-        <footer className="slot-footer">
-          <a href={`/api/apps/${slotId}/smart/launch`}>SMART launch API</a>
-          <a href={`/api/apps/${slotId}/smart/callback`}>SMART callback API</a>
-          <a href={patientContextApiPath(slotId)}>Patient context API</a>
-          <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
-        </footer>
       </section>
     </main>
   );

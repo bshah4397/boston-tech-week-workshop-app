@@ -44,6 +44,26 @@ describe("app host", () => {
     expect(screen.getByRole("heading", { name: /logout complete/i })).toBeInTheDocument();
   });
 
+  it("renders the template as a minimal neutral starting app", () => {
+    render(
+      <TemplateApp
+        appBasePath="/app-007"
+        fullPath="/app-007/demo"
+        query={new URLSearchParams()}
+        route="demo"
+        slotId="app-007"
+      />,
+    );
+
+    expect(screen.getByText("Local Demo")).toBeInTheDocument();
+    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.queryByText(/active care gap/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "SMART launch API" })).not.toBeInTheDocument();
+  });
+
   it("the template postMessage helper sends Embedded App Launcher messages", async () => {
     const { sendEmbeddedAppMessage } = await import("./app-template/post-message");
     const postMessage = vi.fn();

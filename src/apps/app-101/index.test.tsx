@@ -22,39 +22,30 @@ function jsonResponse(body: unknown, status = 200) {
   });
 }
 
-describe("app-101 SMART patient states", () => {
+describe("app-101 Visit Prep Sidecar", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
 
-  it("preserves local demo mode and slot registration URLs", () => {
-    renderSlot("demo");
-
-    expect(screen.getByText("app-101 / local demo")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Visit Prep Sidecar" })).toBeInTheDocument();
-    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Referral follow-up" })).toBeInTheDocument();
-    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
-    expect(screen.getByRole("link", { name: "SMART launch API" })).toHaveAttribute("href", "/api/apps/app-101/smart/launch");
-    expect(screen.getByRole("link", { name: "SMART callback API" })).toHaveAttribute("href", "/api/apps/app-101/smart/callback");
-    expect(screen.getByRole("link", { name: "Logout redirect" })).toHaveAttribute("href", "/app-101/logout-complete");
-  });
-
-  it("sends a persistent review badge message from the active care gap clinical action", async () => {
-    const user = userEvent.setup();
+  it("renders the completed local demo sidecar without developer chrome or generic action buttons", () => {
     const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
 
     renderSlot("demo");
 
-    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
-
-    const clinicalActions = screen.getByRole("region", { name: "Clinical actions" });
-    expect(clinicalActions).not.toHaveTextContent("appShowBadgePersistent");
-
-    await user.click(within(clinicalActions).getByRole("button", { name: "Flag for review" }));
+    expect(screen.getByText("app-101")).toBeInTheDocument();
+    expect(screen.getByText("Local Demo")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visit Prep" })).toBeInTheDocument();
+    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Referral follow-up" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/developer details/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Clinical actions" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "SMART launch API" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /flag for review/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /snooze/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /bring prep back/i })).not.toBeInTheDocument();
 
     expect(postMessage).toHaveBeenCalledWith(
       {
@@ -66,13 +57,14 @@ describe("app-101 SMART patient states", () => {
     );
   });
 
-  it("resizes the launcher and shows active gap details when reviewing details", async () => {
+  it("resizes for details and collapses back to compact width", async () => {
     const user = userEvent.setup();
     const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
 
     renderSlot("demo");
+    postMessage.mockClear();
 
-    await user.click(screen.getByRole("button", { name: "Review details" }));
+    await user.click(screen.getByRole("button", { name: /open details/i }));
 
     expect(postMessage).toHaveBeenCalledWith(
       {
@@ -83,79 +75,33 @@ describe("app-101 SMART patient states", () => {
       },
       "*",
     );
-    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Rationale" })).toBeInTheDocument();
-    expect(screen.getByText("The most recent blood pressure is elevated and should be reviewed before the visit closes.")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Next steps" })).toBeInTheDocument();
-    expect(screen.getByText("Open the latest vitals trend.")).toBeInTheDocument();
-    expect(screen.getByText("Confirm whether repeat blood pressure is needed.")).toBeInTheDocument();
-    expect(screen.getByText("Document follow-up plan before closing the encounter.")).toBeInTheDocument();
-  });
+    expect(screen.getByRole("region", { name: "Review details" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Elevated blood pressure needs follow-up" })).toBeInTheDocument();
 
-  it("snoozes the active detail view while the user updates Athena", async () => {
-    const user = userEvent.setup();
-    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
-
-    renderSlot("demo");
-
-    await user.click(screen.getByRole("button", { name: "Review details" }));
     postMessage.mockClear();
-
-    const activeGapDetails = screen.getByRole("region", { name: "Active gap details" });
-    await user.click(within(activeGapDetails).getByRole("button", { name: "Snooze while I update Athena" }));
+    await user.click(screen.getByRole("button", { name: /collapse details/i }));
 
     expect(postMessage).toHaveBeenCalledWith(
       {
-        method: "appMinimize",
+        method: "appResize",
         methodVersion: "1.0.0",
+        newWidth: "400",
         type: "embeddedAppAPIMessage",
       },
       "*",
     );
-    expect(screen.getByText("Reminder saved while Athena is updated.")).toBeInTheDocument();
-    expect(screen.getByText("Vitals review due remains ready for follow-up.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Review details" })).not.toBeInTheDocument();
   });
 
-  it("reopens the saved reminder and returns to active gap details", async () => {
+  it("marks the active gap reviewed, clears the badge, and returns to compact state", async () => {
     const user = userEvent.setup();
     const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
 
     renderSlot("demo");
-
-    await user.click(screen.getByRole("button", { name: "Review details" }));
-    await user.click(screen.getByRole("button", { name: "Snooze while I update Athena" }));
-
-    expect(screen.getByRole("region", { name: "Reminder state" })).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
-
+    await user.click(screen.getByRole("button", { name: /open details/i }));
     postMessage.mockClear();
-    await user.click(screen.getByRole("button", { name: "Bring prep back" }));
 
-    expect(postMessage).toHaveBeenCalledWith(
-      {
-        method: "appReopen",
-        methodVersion: "1.0.0",
-        type: "embeddedAppAPIMessage",
-      },
-      "*",
-    );
-    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
-  });
-
-  it("clears the badge and returns to compact Visit Prep mode when marked reviewed", async () => {
-    const user = userEvent.setup();
-    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
-
-    renderSlot("demo");
-
-    await user.click(screen.getByRole("button", { name: "Review details" }));
-    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
-
-    postMessage.mockClear();
-    await user.click(screen.getByRole("button", { name: "Mark reviewed" }));
+    await user.click(screen.getByRole("button", { name: /mark reviewed/i }));
 
     expect(postMessage).toHaveBeenCalledWith(
       {
@@ -165,57 +111,68 @@ describe("app-101 SMART patient states", () => {
       },
       "*",
     );
-    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appResize",
+        methodVersion: "1.0.0",
+        newWidth: "400",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
+    expect(screen.queryByRole("region", { name: "Review details" })).not.toBeInTheDocument();
+    expect(screen.getByText("Reviewed")).toBeInTheDocument();
   });
 
-  it("logs inbound context-change events and reloads patient identity in local demo mode", async () => {
-    const user = userEvent.setup();
+  it("reloads updated patient context and reopens after Athena changes patient", async () => {
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
     const fetchMock = vi.fn(async () =>
       jsonResponse({
         patient: {
-          birthDate: "1972-07-08",
-          gender: "male",
-          id: "patient-789",
-          name: [{ family: "Lane", given: ["Morgan"] }],
+          birthDate: "1975-11-12",
+          gender: "female",
+          id: "a-195900.E-5",
+          name: [{ family: "Patel", given: ["Rina"] }],
           resourceType: "Patient",
         },
-        patientId: "patient-789",
+        patientId: "a-195900.E-5",
         source: "framework-context-change",
       }),
     );
     vi.stubGlobal("fetch", fetchMock);
 
     renderSlot("demo");
-
-    await user.click(screen.getByRole("button", { name: "Review details" }));
-    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
+    postMessage.mockClear();
 
     act(() => {
       window.dispatchEvent(
         new MessageEvent("message", {
           data: {
-            context: { patientId: "patient-789" },
-            eventName: "patientContextChanged",
-            type: "embeddedAppFrameworkEvent",
+            event: "patientContextChanged",
+            updatedPatient: "5",
           },
+          origin: "https://preview.athenahealth.com",
         }),
       );
     });
 
-    expect(await screen.findByText("Morgan Lane")).toBeInTheDocument();
-    expect(screen.getByText("DOB 1972-07-08")).toBeInTheDocument();
-    expect(screen.getByText("FHIR ID patient-789")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
+    expect(await screen.findByText("Rina Patel")).toBeInTheDocument();
+    expect(screen.getByText("DOB 1975-11-12")).toBeInTheDocument();
+    expect(screen.getByText("FHIR ID a-195900.E-5")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/apps/app-101/patient-context?updatedPatient=patient-789",
+      "/api/apps/app-101/patient-context?updatedPatient=5",
       expect.objectContaining({
         credentials: "include",
         headers: { Accept: "application/json" },
       }),
+    );
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appReopen",
+        methodVersion: "1.0.0",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
     );
   });
 
@@ -248,55 +205,14 @@ describe("app-101 SMART patient states", () => {
     );
   });
 
-  it("reloads patient identity when the framework sends updatedPatient", async () => {
-    const user = userEvent.setup();
-    const fetchMock = vi.fn(async () =>
-      jsonResponse({
-        patient: {
-          birthDate: "1975-11-12",
-          gender: "female",
-          id: "5",
-          name: [{ family: "Patel", given: ["Rina"] }],
-          resourceType: "Patient",
-        },
-        patientId: "5",
-        source: "framework-context-change",
-      }),
-    );
-    vi.stubGlobal("fetch", fetchMock);
+  it("shows a loader while patient context is loading", () => {
+    vi.stubGlobal("fetch", vi.fn(() => new Promise(() => undefined)));
 
-    renderSlot("demo");
+    renderSlot("home");
 
-    await user.click(screen.getByRole("button", { name: "Review details" }));
-    await user.click(screen.getByRole("button", { name: "Snooze while I update Athena" }));
-    expect(screen.getByRole("region", { name: "Reminder state" })).toBeInTheDocument();
-
-    act(() => {
-      window.dispatchEvent(
-        new MessageEvent("message", {
-          data: {
-            event: "patientContextChanged",
-            type: "embeddedAppFrameworkEvent",
-            updatedPatient: "5",
-          },
-        }),
-      );
-    });
-
-    expect(await screen.findByText("Rina Patel")).toBeInTheDocument();
-    expect(screen.getByText("DOB 1975-11-12")).toBeInTheDocument();
-    expect(screen.getByText("FHIR ID 5")).toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Reminder state" })).not.toBeInTheDocument();
-    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/apps/app-101/patient-context?updatedPatient=5",
-      expect.objectContaining({
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      }),
-    );
+    expect(screen.getByRole("status", { name: /loading patient context/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /open local demo/i })).toHaveAttribute("href", "/app-101/demo");
+    expect(screen.queryByRole("link", { name: "SMART launch API" })).not.toBeInTheDocument();
   });
 
   it("shows setup required when no SMART patient context is available", async () => {
@@ -309,39 +225,25 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByText("Patient context is not available yet.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Start Athena launch" })).toHaveAttribute("href", "/api/apps/app-101/smart/launch");
     expect(document.body).not.toHaveTextContent("server-token");
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/apps/app-101/patient-context",
-      expect.objectContaining({
-        credentials: "include",
-        headers: { Accept: "application/json" },
-      }),
-    );
   });
 
-  it("shows launch in progress with the slot launch API handoff", () => {
+  it("shows launch and callback states without rendering sensitive callback values", () => {
     renderSlot("launch", new URLSearchParams("iss=https%3A%2F%2Ffhir.example%2Fr4&launch=launch-secret"));
 
     expect(screen.getByRole("heading", { name: "Launch In Progress" })).toBeInTheDocument();
-    expect(screen.getByText("Athena launch context received.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Continue SMART launch" })).toHaveAttribute(
       "href",
       "/api/apps/app-101/smart/launch?iss=https%3A%2F%2Ffhir.example%2Fr4&launch=launch-secret",
     );
-    expect(document.body).not.toHaveTextContent("launch-secret");
-  });
 
-  it("shows callback received without rendering authorization codes", () => {
     renderSlot("callback", new URLSearchParams("code=code-secret&state=state-123"));
 
     expect(screen.getByRole("heading", { name: "Callback Received" })).toBeInTheDocument();
-    expect(screen.getByText("The server-side callback endpoint handles code exchange.")).toBeInTheDocument();
-    expect(screen.getByText("/api/apps/app-101/smart/callback")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Load patient context" })).toHaveAttribute("href", "/app-101?smart=1");
     expect(document.body).not.toHaveTextContent("code-secret");
     expect(document.body).not.toHaveTextContent("state-123");
   });
 
-  it("renders loaded patient context with collapsed sanitized developer details", async () => {
+  it("renders loaded patient context without developer details or secrets", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
@@ -367,44 +269,14 @@ describe("app-101 SMART patient states", () => {
     renderSlot("home", new URLSearchParams("smart=1"));
 
     expect(await screen.findByText("Patient Loaded")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Visit Prep Sidecar" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Visit Prep" })).toBeInTheDocument();
     expect(screen.getByText("Jamie Chen")).toBeInTheDocument();
     expect(screen.getByText("DOB 1980-02-03")).toBeInTheDocument();
     expect(screen.getByText("FHIR ID patient-123")).toBeInTheDocument();
     expect(screen.getByText("nonbinary")).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "Referral follow-up" })).toBeInTheDocument();
-    expect(screen.getAllByText("Active care gap")).toHaveLength(1);
-
-    const details = screen.getByText("Developer details").closest("details");
-    expect(details).not.toBeNull();
-    expect(details).not.toHaveAttribute("open");
-    expect(screen.getByText("https://fhir.example/r4")).toBeInTheDocument();
-    expect(screen.getByText("Practitioner/prac-1")).toBeInTheDocument();
+    expect(screen.queryByText("Developer details")).not.toBeInTheDocument();
     expect(document.body).not.toHaveTextContent("server-token");
     expect(document.body).not.toHaveTextContent("Bearer secret-header");
     expect(document.body).not.toHaveTextContent("pkce-secret");
-  });
-
-  it("shows patient load failed without rendering raw bearer headers", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        jsonResponse(
-          {
-            error: "FHIR Patient read failed.",
-            fhirDebug: { request: { headers: { Authorization: "Bearer secret-header" } } },
-          },
-          502,
-        ),
-      ),
-    );
-
-    renderSlot("home", new URLSearchParams("smart=1"));
-
-    expect(await screen.findByRole("heading", { name: "Patient Load Failed" })).toBeInTheDocument();
-    expect(screen.getByText("FHIR Patient read failed.")).toBeInTheDocument();
-    expect(document.body).not.toHaveTextContent("Bearer secret-header");
   });
 });

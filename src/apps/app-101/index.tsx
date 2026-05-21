@@ -1,5 +1,5 @@
-import { Bell, CheckCircle2, ChevronsRight, Minimize2, RotateCcw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { SlotAppProps, SlotConfig } from "../../slot-types";
 import { sendEmbeddedAppMessage } from "./post-message";
 
@@ -49,14 +49,15 @@ const demoPatient: PatientProfile = {
 const prepCards = [
   {
     activeCareGap: true,
+    detailTitle: "Elevated blood pressure needs follow-up",
     label: "Vitals review due",
     nextSteps: [
-      "Open the latest vitals trend.",
-      "Confirm whether repeat blood pressure is needed.",
-      "Document follow-up plan before closing the encounter.",
+      "Open latest vitals trend",
+      "Confirm repeat BP plan",
+      "Document follow-up before closing",
     ],
-    rationale: "The most recent blood pressure is elevated and should be reviewed before the visit closes.",
-    text: "Last BP is elevated. Open details before closing the encounter.",
+    rationale: "Confirm whether repeat vitals or follow-up documentation is needed before the encounter is closed.",
+    text: "Last BP is elevated. Review before closing the encounter.",
   },
   {
     activeCareGap: false,
@@ -64,13 +65,6 @@ const prepCards = [
     nextSteps: ["Review active medication list.", "Confirm discontinued medications."],
     rationale: "Medication history may need cleanup before the encounter is signed.",
     text: "Confirm adherence and update discontinued medications.",
-  },
-  {
-    activeCareGap: false,
-    label: "Referral follow-up",
-    nextSteps: ["Check referral status.", "Confirm cardiology appointment timing."],
-    rationale: "Referral status should be checked while preparing for the visit.",
-    text: "Check whether cardiology referral has been scheduled.",
   },
 ];
 
@@ -94,12 +88,9 @@ export default function App101({ appBasePath, query, route, slotId }: SlotAppPro
   if (route === "demo") {
     return (
       <VisitPrepSidecar
-        appBasePath={appBasePath}
-        contextLabel="local demo"
         patient={demoPatient}
-        showDeveloperEventLog
         slotId={slotId}
-        statusLabel="SMART"
+        statusLabel="Local Demo"
       />
     );
   }
@@ -162,15 +153,19 @@ function PatientContextScreen({ appBasePath, slotId }: { appBasePath: string; sl
 
   if (contextState.status === "loading") {
     return (
-      <StatusPanel
-        appBasePath={appBasePath}
-        detail="Waiting for the slot-scoped patient context endpoint."
-        kicker={`${slotId} / patient context`}
-        primaryHref={`${appBasePath}/demo`}
-        primaryLabel="Open local demo mode"
-        slotId={slotId}
-        title="Patient Context Loading"
-      />
+      <main className="slot-shell">
+        <section className="slot-panel launch-panel">
+          <p className="slot-kicker">{slotId}</p>
+          <h1>Patient Context Loading</h1>
+          <div aria-label="Loading patient context" className="loading-row" role="status">
+            <span className="loading-spinner" aria-hidden="true" />
+            <span>Loading patient context</span>
+          </div>
+          <a className="slot-primary-action" href={`${appBasePath}/demo`}>
+            Open local demo mode
+          </a>
+        </section>
+      </main>
     );
   }
 
@@ -196,9 +191,6 @@ function PatientContextScreen({ appBasePath, slotId }: { appBasePath: string; sl
 
   return (
     <VisitPrepSidecar
-      appBasePath={appBasePath}
-      contextLabel="patient context"
-      developerDetails={<DeveloperDetails context={contextState.context} />}
       patient={contextState.patient}
       slotId={slotId}
       statusLabel="Patient Loaded"
@@ -287,31 +279,36 @@ function SetupRequiredScreen({ appBasePath, message, slotId }: { appBasePath: st
 }
 
 function VisitPrepSidecar({
-  appBasePath,
-  contextLabel,
-  developerDetails,
   patient,
-  showDeveloperEventLog = false,
   slotId,
   statusLabel,
 }: {
-  appBasePath: string;
-  contextLabel: string;
-  developerDetails?: React.ReactNode;
   patient: PatientProfile;
-  showDeveloperEventLog?: boolean;
   slotId: string;
   statusLabel: string;
 }) {
   const activePrepGap = prepCards.find((card) => card.activeCareGap);
   const [currentPatient, setCurrentPatient] = useState(patient);
-  const [developerEventLog, setDeveloperEventLog] = useState<string[]>([]);
-  const [selectedPrepGap, setSelectedPrepGap] = useState<(typeof prepCards)[number] | null>(null);
-  const [reminderState, setReminderState] = useState<{ gap: (typeof prepCards)[number]; status: "snoozed-athena-update" } | null>(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [isReviewed, setIsReviewed] = useState(false);
+  const lastBadgePatientKey = useRef<string | null>(null);
 
   useEffect(() => {
     setCurrentPatient(patient);
+    setDetailsOpen(false);
+    setIsReviewed(false);
+    lastBadgePatientKey.current = null;
   }, [patient]);
+
+  useEffect(() => {
+    if (!activePrepGap || isReviewed) return;
+
+    const patientKey = `${currentPatient.fhirId}:${currentPatient.name}`;
+    if (lastBadgePatientKey.current === patientKey) return;
+
+    sendEmbeddedAppMessage("appShowBadgePersistent");
+    lastBadgePatientKey.current = patientKey;
+  }, [activePrepGap, currentPatient.fhirId, currentPatient.name, isReviewed]);
 
   useEffect(() => {
     let isCurrent = true;
@@ -326,6 +323,10 @@ function VisitPrepSidecar({
 
         if (isCurrent && response.ok) {
           setCurrentPatient(patientProfile(body));
+          setDetailsOpen(false);
+          setIsReviewed(false);
+          lastBadgePatientKey.current = null;
+          sendEmbeddedAppMessage("appReopen");
         }
       } catch {
         // Keep the current identity if the launcher context changes before SMART context is reachable.
@@ -333,7 +334,7 @@ function VisitPrepSidecar({
     }
 
     function handleFrameworkMessage(event: MessageEvent) {
-      console.log("[app-101] received window message", {
+      console.log(`[${slotId}] received window message`, {
         data: event.data,
         origin: event.origin,
       });
@@ -341,14 +342,10 @@ function VisitPrepSidecar({
       const eventName = frameworkEventName(event.data);
       if (!eventName) return;
 
-      if (showDeveloperEventLog) {
-        setDeveloperEventLog((events) => [eventName, ...events].slice(0, 5));
-      }
-
       if (!isPatientContextChangeEvent(eventName, event.data)) return;
 
-      setSelectedPrepGap(null);
-      setReminderState(null);
+      setDetailsOpen(false);
+      setIsReviewed(false);
 
       const updatedPatient = patientIdentifierFromMessage(event.data);
       if (updatedPatient) {
@@ -362,183 +359,103 @@ function VisitPrepSidecar({
       isCurrent = false;
       window.removeEventListener("message", handleFrameworkMessage);
     };
-  }, [showDeveloperEventLog, slotId]);
+  }, [slotId]);
 
-  function reviewActivePrepGap() {
+  function openDetails() {
     if (!activePrepGap) return;
 
     sendEmbeddedAppMessage("appResize", { newWidth: "600" });
-    setSelectedPrepGap(activePrepGap);
+    setDetailsOpen(true);
   }
 
-  function snoozeForAthenaUpdate() {
-    if (!selectedPrepGap) return;
-
-    setReminderState({ gap: selectedPrepGap, status: "snoozed-athena-update" });
-    setSelectedPrepGap(null);
-    sendEmbeddedAppMessage("appMinimize");
-  }
-
-  function bringPrepBack() {
-    sendEmbeddedAppMessage("appReopen");
-
-    if (reminderState) {
-      setSelectedPrepGap(reminderState.gap);
-      setReminderState(null);
-    }
+  function collapseDetails() {
+    sendEmbeddedAppMessage("appResize", { newWidth: "400" });
+    setDetailsOpen(false);
   }
 
   function markReviewed() {
     sendEmbeddedAppMessage("appClearBadge");
-    setReminderState(null);
-    setSelectedPrepGap(null);
+    sendEmbeddedAppMessage("appResize", { newWidth: "400" });
+    setIsReviewed(true);
+    setDetailsOpen(false);
   }
 
   return (
-    <main className="sidecar-shell">
+    <main className={`sidecar-shell ${detailsOpen ? "sidecar-shell-expanded" : ""}`}>
       <section className="sidecar-card" aria-labelledby="sidecar-title">
         <header className="sidecar-titlebar">
           <div>
-            <p className="slot-kicker">
-              {slotId} / {contextLabel}
-            </p>
-            <h1 id="sidecar-title">Visit Prep Sidecar</h1>
+            <p className="slot-kicker">{slotId}</p>
+            <h1 id="sidecar-title">Visit Prep</h1>
           </div>
           <span>{statusLabel}</span>
         </header>
 
-        <section className="patient-strip" aria-label="Patient identity">
-          <strong>{currentPatient.name}</strong>
-          <span>DOB {currentPatient.dob}</span>
-          <span>FHIR ID {currentPatient.fhirId}</span>
-          <span>{currentPatient.gender}</span>
+        <section className="patient-banner" aria-label="Patient identity">
+          <span className="patient-avatar" aria-hidden="true">
+            {patientInitials(currentPatient.name)}
+          </span>
+          <div>
+            <strong>{currentPatient.name}</strong>
+            <span>DOB {currentPatient.dob}</span>
+            <span>FHIR ID {currentPatient.fhirId}</span>
+            <span>{currentPatient.gender}</span>
+          </div>
         </section>
 
-        {developerDetails}
-        {showDeveloperEventLog ? <DeveloperEventLog events={developerEventLog} /> : null}
-
-        {selectedPrepGap ? (
-          <section className="prep-card active" aria-label="Active gap details">
-            <span className="slot-kicker">Active care gap</span>
-            <h2>{selectedPrepGap.label}</h2>
-            <h3>Rationale</h3>
-            <p>{selectedPrepGap.rationale}</p>
-            <h3>Next steps</h3>
-            <ul>
-              {selectedPrepGap.nextSteps.map((step) => (
-                <li key={step}>{step}</li>
-              ))}
-            </ul>
-            <div className="action-grid">
-              <button type="button" onClick={snoozeForAthenaUpdate}>
-                <Minimize2 aria-hidden="true" size={16} />
-                Snooze while I update Athena
-              </button>
-            </div>
-          </section>
-        ) : reminderState ? (
-          <section className="prep-card active" aria-label="Reminder state">
-            <span className="slot-kicker">Reminder pending</span>
-            <h2>{reminderState.gap.label}</h2>
-            <div aria-live="polite">
-              <p>Reminder saved while Athena is updated.</p>
-              <p>{reminderState.gap.label} remains ready for follow-up.</p>
-            </div>
-          </section>
-        ) : (
+        <div className={`sidecar-content ${detailsOpen ? "with-detail" : ""}`}>
           <section className="prep-list" aria-label="Visit prep cards">
             {prepCards.map((card) => (
-              <article className={`prep-card ${card.activeCareGap ? "active" : "default"}`} key={card.label}>
-                {card.activeCareGap ? <span className="slot-kicker">Active care gap</span> : null}
+              <article className={`prep-card ${card.activeCareGap && !isReviewed ? "active" : "default"}`} key={card.label}>
+                {card.activeCareGap ? (
+                  <div className="care-gap-head">
+                    <span className="slot-kicker">Active care gap</span>
+                    {!isReviewed ? <span className="attention-dot" aria-hidden="true" /> : null}
+                  </div>
+                ) : null}
                 <h2>{card.label}</h2>
                 <p>{card.text}</p>
+                {card.activeCareGap && isReviewed ? <strong className="reviewed-state">Reviewed</strong> : null}
+                {card.activeCareGap && !isReviewed && !detailsOpen ? (
+                  <div className="card-actions">
+                    <button className="slot-primary-action compact-action" type="button" onClick={openDetails}>
+                      <ArrowLeft aria-hidden="true" size={16} />
+                      Open details
+                    </button>
+                  </div>
+                ) : null}
               </article>
             ))}
           </section>
-        )}
-
-        <section className="action-grid" aria-label="Clinical actions">
-          {activePrepGap ? (
-            <button type="button" onClick={() => sendEmbeddedAppMessage("appShowBadgePersistent")}>
-              <Bell aria-hidden="true" size={16} />
-              Flag for review
-            </button>
+          {detailsOpen && activePrepGap ? (
+            <section className="review-detail" aria-label="Review details">
+              <span className="slot-kicker">Review details</span>
+              <h2>{activePrepGap.detailTitle}</h2>
+              <p>{activePrepGap.rationale}</p>
+              <div className="detail-checklist">
+                {activePrepGap.nextSteps.map((step) => (
+                  <div key={step}>{step}</div>
+                ))}
+              </div>
+              <div className="detail-actions">
+                <button className="secondary-detail-action" type="button" onClick={collapseDetails}>
+                  <ArrowRight aria-hidden="true" size={16} />
+                  Collapse details
+                </button>
+                <button className="slot-primary-action compact-action" type="button" onClick={markReviewed}>
+                  <Check aria-hidden="true" size={16} />
+                  Mark reviewed
+                </button>
+              </div>
+            </section>
           ) : null}
-          <button type="button" onClick={reviewActivePrepGap}>
-            <ChevronsRight aria-hidden="true" size={16} />
-            Review details
-          </button>
-          <button type="button" onClick={() => sendEmbeddedAppMessage("appMinimize")}>
-            <Minimize2 aria-hidden="true" size={16} />
-            Snooze
-          </button>
-          <button type="button" onClick={bringPrepBack}>
-            <RotateCcw aria-hidden="true" size={16} />
-            Bring prep back
-          </button>
-          <button type="button" onClick={markReviewed}>
-            <CheckCircle2 aria-hidden="true" size={16} />
-            Mark reviewed
-          </button>
-        </section>
-
-        <footer className="slot-footer">
-          <a href={slotApiPath(slotId, "smart/launch")}>SMART launch API</a>
-          <a href={slotApiPath(slotId, "smart/callback")}>SMART callback API</a>
-          <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
-        </footer>
+        </div>
       </section>
     </main>
   );
 }
 
-function DeveloperDetails({ context }: { context: PatientContext }) {
-  const patient = context.patient ?? {};
-
-  return (
-    <details>
-      <summary>Developer details</summary>
-      <dl>
-        <div>
-          <dt>Source</dt>
-          <dd>{textValue(context.source)}</dd>
-        </div>
-        <div>
-          <dt>FHIR server</dt>
-          <dd>{textValue(context.serverUrl)}</dd>
-        </div>
-        <div>
-          <dt>FHIR user</dt>
-          <dd>{textValue(context.fhirUser)}</dd>
-        </div>
-        <div>
-          <dt>Patient resource</dt>
-          <dd>{textValue(patient.resourceType)}</dd>
-        </div>
-      </dl>
-    </details>
-  );
-}
-
-function DeveloperEventLog({ events }: { events: string[] }) {
-  return (
-    <section className="prep-card default" aria-label="Developer event log">
-      <span className="slot-kicker">Developer event log</span>
-      {events.length > 0 ? (
-        <ol>
-          {events.map((eventName, index) => (
-            <li key={`${eventName}-${index}`}>{eventName}</li>
-          ))}
-        </ol>
-      ) : (
-        <p>No framework events received.</p>
-      )}
-    </section>
-  );
-}
-
 function StatusPanel({
-  appBasePath,
   detail,
   extra,
   kicker,
@@ -546,7 +463,6 @@ function StatusPanel({
   primaryLabel,
   secondaryHref,
   secondaryLabel,
-  slotId,
   title,
 }: {
   appBasePath: string;
@@ -575,11 +491,6 @@ function StatusPanel({
             {secondaryLabel}
           </a>
         ) : null}
-        <footer className="slot-footer">
-          <a href={slotApiPath(slotId, "smart/launch")}>SMART launch API</a>
-          <a href={slotApiPath(slotId, "smart/callback")}>SMART callback API</a>
-          <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
-        </footer>
       </section>
     </main>
   );
@@ -662,6 +573,17 @@ function patientName(value: unknown) {
   }
 
   return "Unknown patient";
+}
+
+function patientInitials(name: string) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "PT";
 }
 
 function errorMessage(context: PatientContext) {
