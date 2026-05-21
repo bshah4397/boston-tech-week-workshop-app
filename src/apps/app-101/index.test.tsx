@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App101 from "./index";
@@ -168,6 +168,55 @@ describe("app-101 SMART patient states", () => {
     expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
     expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
+  });
+
+  it("logs inbound context-change events and reloads patient identity in local demo mode", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn(async () =>
+      jsonResponse({
+        patient: {
+          birthDate: "1972-07-08",
+          gender: "male",
+          id: "patient-789",
+          name: [{ family: "Lane", given: ["Morgan"] }],
+          resourceType: "Patient",
+        },
+        patientId: "patient-789",
+        source: "framework-context-change",
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+    expect(screen.getByRole("region", { name: "Active gap details" })).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent("message", {
+          data: {
+            context: { patientId: "patient-789" },
+            eventName: "patientContextChanged",
+            type: "embeddedAppFrameworkEvent",
+          },
+        }),
+      );
+    });
+
+    expect(await screen.findByText("Morgan Lane")).toBeInTheDocument();
+    expect(screen.getByText("DOB 1972-07-08")).toBeInTheDocument();
+    expect(screen.getByText("FHIR ID patient-789")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "Active gap details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Visit prep cards" })).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Developer event log" })).toHaveTextContent("patientContextChanged");
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/apps/app-101/patient-context",
+      expect.objectContaining({
+        credentials: "include",
+        headers: { Accept: "application/json" },
+      }),
+    );
   });
 
   it("shows setup required when no SMART patient context is available", async () => {

@@ -97,6 +97,7 @@ export default function App101({ appBasePath, query, route, slotId }: SlotAppPro
         appBasePath={appBasePath}
         contextLabel="local demo"
         patient={demoPatient}
+        showDeveloperEventLog
         slotId={slotId}
         statusLabel="SMART"
       />
@@ -290,6 +291,7 @@ function VisitPrepSidecar({
   contextLabel,
   developerDetails,
   patient,
+  showDeveloperEventLog = false,
   slotId,
   statusLabel,
 }: {
@@ -297,12 +299,64 @@ function VisitPrepSidecar({
   contextLabel: string;
   developerDetails?: React.ReactNode;
   patient: PatientProfile;
+  showDeveloperEventLog?: boolean;
   slotId: string;
   statusLabel: string;
 }) {
   const activePrepGap = prepCards.find((card) => card.activeCareGap);
+  const [currentPatient, setCurrentPatient] = useState(patient);
+  const [developerEventLog, setDeveloperEventLog] = useState<string[]>([]);
   const [selectedPrepGap, setSelectedPrepGap] = useState<(typeof prepCards)[number] | null>(null);
   const [reminderState, setReminderState] = useState<{ gap: (typeof prepCards)[number]; status: "snoozed-athena-update" } | null>(null);
+
+  useEffect(() => {
+    setCurrentPatient(patient);
+  }, [patient]);
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function reloadPatientIdentity() {
+      try {
+        const response = await fetch(`/api/apps/${slotId}/patient-context`, {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        const body = (await readJson(response)) as PatientContext;
+
+        if (isCurrent && response.ok) {
+          setCurrentPatient(patientProfile(body));
+        }
+      } catch {
+        // Keep the current identity if the launcher context changes before SMART context is reachable.
+      }
+    }
+
+    function handleFrameworkMessage(event: MessageEvent) {
+      const eventName = frameworkEventName(event.data);
+      if (!eventName) return;
+
+      if (showDeveloperEventLog) {
+        setDeveloperEventLog((events) => [eventName, ...events].slice(0, 5));
+      }
+
+      if (!isPatientContextChangeEvent(eventName, event.data)) return;
+
+      setSelectedPrepGap(null);
+      setReminderState(null);
+
+      if (patientIdentifierFromMessage(event.data)) {
+        void reloadPatientIdentity();
+      }
+    }
+
+    window.addEventListener("message", handleFrameworkMessage);
+
+    return () => {
+      isCurrent = false;
+      window.removeEventListener("message", handleFrameworkMessage);
+    };
+  }, [showDeveloperEventLog, slotId]);
 
   function reviewActivePrepGap() {
     if (!activePrepGap) return;
@@ -348,13 +402,14 @@ function VisitPrepSidecar({
         </header>
 
         <section className="patient-strip" aria-label="Patient identity">
-          <strong>{patient.name}</strong>
-          <span>DOB {patient.dob}</span>
-          <span>FHIR ID {patient.fhirId}</span>
-          <span>{patient.gender}</span>
+          <strong>{currentPatient.name}</strong>
+          <span>DOB {currentPatient.dob}</span>
+          <span>FHIR ID {currentPatient.fhirId}</span>
+          <span>{currentPatient.gender}</span>
         </section>
 
         {developerDetails}
+        {showDeveloperEventLog ? <DeveloperEventLog events={developerEventLog} /> : null}
 
         {selectedPrepGap ? (
           <section className="prep-card active" aria-label="Active gap details">
@@ -456,6 +511,23 @@ function DeveloperDetails({ context }: { context: PatientContext }) {
         </div>
       </dl>
     </details>
+  );
+}
+
+function DeveloperEventLog({ events }: { events: string[] }) {
+  return (
+    <section className="prep-card default" aria-label="Developer event log">
+      <span className="slot-kicker">Developer event log</span>
+      {events.length > 0 ? (
+        <ol>
+          {events.map((eventName, index) => (
+            <li key={`${eventName}-${index}`}>{eventName}</li>
+          ))}
+        </ol>
+      ) : (
+        <p>No framework events received.</p>
+      )}
+    </section>
   );
 }
 
@@ -589,4 +661,75 @@ function textValue(value: unknown, fallback = "Unavailable") {
 
 function stringValue(value: unknown) {
   return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function frameworkEventName(value: unknown): string | null {
+  const record = recordValue(value);
+  if (!record) return null;
+
+  const explicitName =
+    stringValue(record.eventName) ??
+    stringValue(record.name) ??
+    stringValue(record.event) ??
+    stringValue(record.contextEvent) ??
+    nestedFrameworkEventName(record);
+
+  if (explicitName) return explicitName;
+
+  const type = stringValue(record.type);
+  if (type === "embeddedAppAPIMessage") return null;
+  return type;
+}
+
+function nestedFrameworkEventName(record: Record<string, unknown>) {
+  for (const key of ["context", "data", "detail", "payload"]) {
+    const eventName = frameworkEventName(record[key]);
+    if (eventName) return eventName;
+  }
+
+  return null;
+}
+
+function isPatientContextChangeEvent(eventName: string, value: unknown) {
+  const normalizedEventName = eventName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  const isChangeEvent = normalizedEventName.includes("change");
+
+  if (!isChangeEvent) return false;
+  if (normalizedEventName.includes("patient")) return true;
+
+  return normalizedEventName.includes("context") && patientIdentifierFromMessage(value) !== null;
+}
+
+function patientIdentifierFromMessage(value: unknown, depth = 0): string | null {
+  if (depth > 4) return null;
+
+  const record = recordValue(value);
+  if (!record) return null;
+
+  const directIdentifier =
+    stringValue(record.patientId) ??
+    stringValue(record.patientID) ??
+    stringValue(record.patientIdentifier) ??
+    stringValue(record.fhirPatientId) ??
+    patientIdentifierFromPatientRecord(record.patient);
+
+  if (directIdentifier) return directIdentifier;
+
+  for (const key of ["context", "data", "detail", "payload"]) {
+    const nestedIdentifier = patientIdentifierFromMessage(record[key], depth + 1);
+    if (nestedIdentifier) return nestedIdentifier;
+  }
+
+  return null;
+}
+
+function patientIdentifierFromPatientRecord(value: unknown) {
+  const patient = recordValue(value);
+  if (!patient) return null;
+
+  return stringValue(patient.id) ?? stringValue(patient.patientId) ?? stringValue(patient.patientIdentifier);
+}
+
+function recordValue(value: unknown) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : null;
 }
