@@ -302,12 +302,20 @@ function VisitPrepSidecar({
 }) {
   const activePrepGap = prepCards.find((card) => card.activeCareGap);
   const [selectedPrepGap, setSelectedPrepGap] = useState<(typeof prepCards)[number] | null>(null);
+  const [reminderState, setReminderState] = useState<{ gapLabel: string; status: "snoozed-athena-update" } | null>(null);
 
   function reviewActivePrepGap() {
     if (!activePrepGap) return;
 
     sendEmbeddedAppMessage("appResize", { newWidth: "600" });
     setSelectedPrepGap(activePrepGap);
+  }
+
+  function snoozeForAthenaUpdate() {
+    if (!selectedPrepGap) return;
+
+    setReminderState({ gapLabel: selectedPrepGap.label, status: "snoozed-athena-update" });
+    sendEmbeddedAppMessage("appMinimize");
   }
 
   return (
@@ -344,6 +352,18 @@ function VisitPrepSidecar({
                 <li key={step}>{step}</li>
               ))}
             </ul>
+            {reminderState?.status === "snoozed-athena-update" ? (
+              <div aria-live="polite">
+                <p>Reminder saved while Athena is updated.</p>
+                <p>{reminderState.gapLabel} remains ready for follow-up.</p>
+              </div>
+            ) : null}
+            <div className="action-grid">
+              <button type="button" onClick={snoozeForAthenaUpdate}>
+                <Minimize2 aria-hidden="true" size={16} />
+                Snooze while I update Athena
+              </button>
+            </div>
           </section>
         ) : (
           <section className="prep-list" aria-label="Visit prep cards">

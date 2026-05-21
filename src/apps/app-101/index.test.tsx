@@ -94,6 +94,30 @@ describe("app-101 SMART patient states", () => {
     expect(screen.getByText("Document follow-up plan before closing the encounter.")).toBeInTheDocument();
   });
 
+  it("snoozes the active detail view while the user updates Athena", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.spyOn(window.parent, "postMessage").mockImplementation(() => undefined);
+
+    renderSlot("demo");
+
+    await user.click(screen.getByRole("button", { name: "Review details" }));
+    postMessage.mockClear();
+
+    const activeGapDetails = screen.getByRole("region", { name: "Active gap details" });
+    await user.click(within(activeGapDetails).getByRole("button", { name: "Snooze while I update Athena" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        method: "appMinimize",
+        methodVersion: "1.0.0",
+        type: "embeddedAppAPIMessage",
+      },
+      "*",
+    );
+    expect(screen.getByText("Reminder saved while Athena is updated.")).toBeInTheDocument();
+    expect(screen.getByText("Vitals review due remains ready for follow-up.")).toBeInTheDocument();
+  });
+
   it("shows setup required when no SMART patient context is available", async () => {
     const fetchMock = vi.fn(async () => jsonResponse({ accessToken: "server-token", error: "No active SMART session." }, 401));
     vi.stubGlobal("fetch", fetchMock);
