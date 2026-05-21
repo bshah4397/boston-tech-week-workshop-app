@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { SlotAppProps, SlotConfig } from "../../slot-types";
 
 export const slotConfig: SlotConfig = {
@@ -12,6 +13,20 @@ const patient = {
   gender: "female",
   name: "Alex Rivers",
 };
+
+type PatientSummary = {
+  dob: string;
+  fhirId: string;
+  gender: string;
+  name: string;
+};
+
+type PatientContextResponse = {
+  patient?: unknown;
+  patientId?: string | null;
+};
+
+type SmartState = "callback received" | "patient loaded" | "patient load failed";
 
 const prepCards = [
   {
@@ -36,68 +51,97 @@ export default function TemplateApp({ appBasePath, query, route, slotId }: SlotA
   }
 
   if (route === "callback") {
-    return <CallbackScreen appBasePath={appBasePath} query={query} />;
+    return <CallbackScreen appBasePath={appBasePath} slotId={slotId} />;
   }
 
   if (route === "unknown") {
     return <AppError appBasePath={appBasePath} />;
   }
 
-  return <VisitPrepDemo slotId={slotId} />;
+  if (route === "demo") {
+    return <VisitPrepDemo slotId={slotId} />;
+  }
+
+  return <SmartVisitPrep appBasePath={appBasePath} query={query} slotId={slotId} />;
 }
 
 function LaunchScreen({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
   const launch = query.get("launch");
   const issuer = query.get("iss");
+  const launchHref = smartLaunchApiPath(slotId, query);
+
+  if (!launch || !issuer) {
+    return (
+      <main className="slot-shell">
+        <section className="slot-panel launch-panel">
+          <p className="slot-kicker">Setup required</p>
+          <h1>Setup Required</h1>
+          <p>A SMART launch must include both issuer and launch context before this sidecar can continue.</p>
+          <dl>
+            <div>
+              <dt>Launch URL</dt>
+              <dd>{`/api/apps/${slotId}/smart/launch`}</dd>
+            </div>
+            <div>
+              <dt>Post-login redirect</dt>
+              <dd>{`/api/apps/${slotId}/smart/callback`}</dd>
+            </div>
+            <div>
+              <dt>Post-logout redirect</dt>
+              <dd>{`${appBasePath}/logout-complete`}</dd>
+            </div>
+          </dl>
+          <a className="slot-primary-action" href={`${appBasePath}/demo`}>
+            Open local demo mode
+          </a>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="slot-shell">
       <section className="slot-panel launch-panel">
-        <p className="slot-kicker">{slotId} / SMART launch</p>
-        <h1>Launch Route Ready</h1>
-        <p>
-          This template route is intentionally thin. The participant prompt upgrades this file with
-          the SMART authorization behavior for the assigned app slot.
-        </p>
+        <p className="slot-kicker">Launch in progress</p>
+        <h1>Launch In Progress</h1>
+        <p>Continue through the slot-scoped SMART launch API to complete Athena authorization.</p>
         <dl>
           <div>
             <dt>Issuer</dt>
-            <dd>{issuer || "Missing iss query parameter"}</dd>
+            <dd>{issuer}</dd>
           </div>
           <div>
             <dt>Launch</dt>
-            <dd>{launch || "Missing launch query parameter"}</dd>
+            <dd>{launch}</dd>
+          </div>
+          <div>
+            <dt>Launch API</dt>
+            <dd>{`/api/apps/${slotId}/smart/launch`}</dd>
           </div>
         </dl>
-        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
-          Open local demo mode
+        <a className="slot-primary-action" href={launchHref}>
+          Continue SMART launch
         </a>
       </section>
     </main>
   );
 }
 
-function CallbackScreen({ appBasePath, query }: { appBasePath: string; query: URLSearchParams }) {
-  const hasCode = Boolean(query.get("code"));
-  const hasState = Boolean(query.get("state"));
-
+function CallbackScreen({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
   return (
     <main className="slot-shell">
       <section className="slot-panel launch-panel">
-        <p className="slot-kicker">SMART callback</p>
-        <h1>Callback Route Ready</h1>
-        <p>
-          Authorization codes and token material are never displayed in this workshop UI. This page
-          only confirms whether callback parameters arrived.
-        </p>
+        <p className="slot-kicker">Callback received</p>
+        <h1>Callback Received</h1>
+        <p>The app host has received the SMART callback route. Sensitive callback values are handled by the server API.</p>
         <dl>
           <div>
-            <dt>Authorization code</dt>
-            <dd>{hasCode ? "Present" : "Missing"}</dd>
+            <dt>Post-login redirect</dt>
+            <dd>{`/api/apps/${slotId}/smart/callback`}</dd>
           </div>
           <div>
-            <dt>State</dt>
-            <dd>{hasState ? "Present" : "Missing"}</dd>
+            <dt>Patient context</dt>
+            <dd>{patientContextApiPath(slotId)}</dd>
           </div>
         </dl>
         <a className="slot-primary-action" href={`${appBasePath}/demo`}>
@@ -108,7 +152,90 @@ function CallbackScreen({ appBasePath, query }: { appBasePath: string; query: UR
   );
 }
 
-function VisitPrepDemo({ slotId }: { slotId: string }) {
+function SmartVisitPrep({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
+  const [state, setState] = useState<SmartState>("callback received");
+  const [patientSummary, setPatientSummary] = useState<PatientSummary | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function loadPatientContext() {
+      try {
+        const response = await fetch(patientContextApiPath(slotId), {
+          headers: { Accept: "application/json" },
+          method: "GET",
+        });
+
+        if (!response.ok) {
+          throw new Error("Patient context unavailable");
+        }
+
+        const context = (await response.json()) as PatientContextResponse;
+        const summary = patientSummaryFromContext(context);
+        if (!summary) {
+          throw new Error("Patient context missing patient details");
+        }
+
+        if (isMounted) {
+          setPatientSummary(summary);
+          setState("patient loaded");
+        }
+      } catch {
+        if (isMounted) {
+          setPatientSummary(null);
+          setState("patient load failed");
+        }
+      }
+    }
+
+    loadPatientContext();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [slotId]);
+
+  if (state === "patient loaded" && patientSummary) {
+    return <VisitPrepDemo patientSummary={patientSummary} slotId={slotId} stateLabel="Patient loaded" />;
+  }
+
+  return (
+    <main className="slot-shell">
+      <section className="slot-panel launch-panel">
+        <p className="slot-kicker">{stateLabel(state)}</p>
+        <h1>{state === "callback received" ? "Callback Received" : "Patient Context Unavailable"}</h1>
+        <p>
+          {state === "callback received"
+            ? "The callback is complete. Loading patient context from the slot-scoped API."
+            : "Patient context could not be loaded for this slot. Local demo mode is still available."}
+        </p>
+        <dl>
+          <div>
+            <dt>Patient context API</dt>
+            <dd>{patientContextApiPath(slotId)}</dd>
+          </div>
+          <div>
+            <dt>Post-login redirect</dt>
+            <dd>{`/api/apps/${slotId}/smart/callback`}</dd>
+          </div>
+        </dl>
+        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
+          Open local demo mode
+        </a>
+      </section>
+    </main>
+  );
+}
+
+function VisitPrepDemo({
+  patientSummary = patient,
+  slotId,
+  stateLabel = "Local Demo",
+}: {
+  patientSummary?: PatientSummary;
+  slotId: string;
+  stateLabel?: string;
+}) {
   return (
     <main className="sidecar-shell">
       <section className="sidecar-card" aria-labelledby="sidecar-title">
@@ -117,20 +244,10 @@ function VisitPrepDemo({ slotId }: { slotId: string }) {
             <p className="slot-kicker">{slotId}</p>
             <h1 id="sidecar-title">Visit Prep</h1>
           </div>
-          <span>Local Demo</span>
+          <span>{stateLabel}</span>
         </header>
 
-        <section className="patient-banner" aria-label="Patient identity">
-          <span className="patient-avatar" aria-hidden="true">
-            AR
-          </span>
-          <div>
-            <strong>{patient.name}</strong>
-            <span>DOB {patient.dob}</span>
-            <span>FHIR ID {patient.fhirId}</span>
-            <span>{patient.gender}</span>
-          </div>
-        </section>
+        <PatientBanner patientSummary={patientSummary} />
 
         <section className="prep-list" aria-label="Visit prep cards">
           {prepCards.map((card) => (
@@ -142,6 +259,22 @@ function VisitPrepDemo({ slotId }: { slotId: string }) {
         </section>
       </section>
     </main>
+  );
+}
+
+function PatientBanner({ patientSummary }: { patientSummary: PatientSummary }) {
+  return (
+    <section className="patient-banner" aria-label="Patient identity">
+      <span className="patient-avatar" aria-hidden="true">
+        {patientInitials(patientSummary.name)}
+      </span>
+      <div>
+        <strong>{patientSummary.name}</strong>
+        <span>DOB {patientSummary.dob}</span>
+        <span>FHIR ID {patientSummary.fhirId}</span>
+        <span>{patientSummary.gender}</span>
+      </div>
+    </section>
   );
 }
 
@@ -180,4 +313,63 @@ export function patientContextApiPath(slotId: string, updatedPatient?: string) {
 
   const query = new URLSearchParams({ updatedPatient });
   return `/api/apps/${slotId}/patient-context?${query}`;
+}
+
+function smartLaunchApiPath(slotId: string, query: URLSearchParams) {
+  const launchQuery = new URLSearchParams();
+  const issuer = query.get("iss");
+  const launch = query.get("launch");
+  if (issuer) launchQuery.set("iss", issuer);
+  if (launch) launchQuery.set("launch", launch);
+
+  const queryString = launchQuery.toString();
+  return `/api/apps/${slotId}/smart/launch${queryString ? `?${queryString}` : ""}`;
+}
+
+function stateLabel(state: SmartState) {
+  if (state === "patient loaded") return "Patient loaded";
+  if (state === "patient load failed") return "Patient load failed";
+  return "Callback received";
+}
+
+function patientSummaryFromContext(context: PatientContextResponse): PatientSummary | null {
+  if (!isRecord(context.patient)) return null;
+
+  return {
+    dob: stringValue(context.patient.birthDate) || "Unknown",
+    fhirId: stringValue(context.patient.id) || stringValue(context.patientId) || "Unknown",
+    gender: stringValue(context.patient.gender) || "Unknown",
+    name: patientName(context.patient) || "Unknown patient",
+  };
+}
+
+function patientName(patientResource: Record<string, unknown>) {
+  if (typeof patientResource.name === "string") return patientResource.name;
+  if (!Array.isArray(patientResource.name)) return null;
+
+  const primaryName = patientResource.name.find(isRecord);
+  if (!primaryName) return null;
+
+  const given = Array.isArray(primaryName.given) ? primaryName.given.filter((value): value is string => typeof value === "string") : [];
+  const family = stringValue(primaryName.family);
+  return [...given, family].filter(Boolean).join(" ") || null;
+}
+
+function patientInitials(name: string) {
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+
+  return initials || "PT";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
