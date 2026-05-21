@@ -1,4 +1,5 @@
 import { Bell, CheckCircle2, ChevronsRight, Minimize2, RotateCcw } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { SlotAppProps, SlotConfig } from "../../slot-types";
 import { sendEmbeddedAppMessage } from "./post-message";
 
@@ -8,7 +9,37 @@ export const slotConfig: SlotConfig = {
   title: "Visit Prep Sidecar",
 };
 
-const patient = {
+type FhirPatient = {
+  birthDate?: unknown;
+  gender?: unknown;
+  id?: unknown;
+  name?: unknown;
+  resourceType?: unknown;
+};
+
+type PatientContext = {
+  error?: unknown;
+  fhirUser?: unknown;
+  patient?: FhirPatient;
+  patientId?: unknown;
+  serverUrl?: unknown;
+  source?: unknown;
+};
+
+type PatientProfile = {
+  dob: string;
+  fhirId: string;
+  gender: string;
+  name: string;
+};
+
+type PatientContextState =
+  | { status: "loading" }
+  | { message: string; status: "setup-required" }
+  | { context: PatientContext; patient: PatientProfile; status: "loaded" }
+  | { message: string; status: "failed" };
+
+const demoPatient: PatientProfile = {
   dob: "04/12/1975",
   fhirId: "12345",
   gender: "female",
@@ -33,7 +64,7 @@ const prepCards = [
   },
 ];
 
-export default function TemplateApp({ appBasePath, query, route, slotId }: SlotAppProps) {
+export default function App101({ appBasePath, query, route, slotId }: SlotAppProps) {
   if (route === "logout-complete") {
     return <LogoutCompleteScreen appBasePath={appBasePath} slotId={slotId} />;
   }
@@ -43,88 +74,233 @@ export default function TemplateApp({ appBasePath, query, route, slotId }: SlotA
   }
 
   if (route === "callback") {
-    return <CallbackScreen appBasePath={appBasePath} query={query} />;
+    return <CallbackScreen appBasePath={appBasePath} slotId={slotId} />;
   }
 
   if (route === "unknown") {
-    return <AppError appBasePath={appBasePath} />;
+    return <AppError appBasePath={appBasePath} slotId={slotId} />;
   }
 
-  return <VisitPrepDemo appBasePath={appBasePath} slotId={slotId} />;
+  if (route === "demo") {
+    return (
+      <VisitPrepSidecar
+        appBasePath={appBasePath}
+        contextLabel="local demo"
+        patient={demoPatient}
+        slotId={slotId}
+        statusLabel="SMART"
+      />
+    );
+  }
+
+  return <PatientContextScreen appBasePath={appBasePath} slotId={slotId} />;
+}
+
+function PatientContextScreen({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
+  const [contextState, setContextState] = useState<PatientContextState>({ status: "loading" });
+
+  useEffect(() => {
+    let isCurrent = true;
+
+    async function loadPatientContext() {
+      try {
+        const response = await fetch(`/api/apps/${slotId}/patient-context`, {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        const body = (await readJson(response)) as PatientContext;
+
+        if (!isCurrent) return;
+
+        if (!response.ok) {
+          if (response.status === 401) {
+            setContextState({
+              message: "Patient context is not available yet.",
+              status: "setup-required",
+            });
+            return;
+          }
+
+          setContextState({
+            message: errorMessage(body),
+            status: "failed",
+          });
+          return;
+        }
+
+        setContextState({
+          context: body,
+          patient: patientProfile(body),
+          status: "loaded",
+        });
+      } catch {
+        if (!isCurrent) return;
+        setContextState({
+          message: "Unable to load patient context.",
+          status: "failed",
+        });
+      }
+    }
+
+    void loadPatientContext();
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [slotId]);
+
+  if (contextState.status === "loading") {
+    return (
+      <StatusPanel
+        appBasePath={appBasePath}
+        detail="Waiting for the slot-scoped patient context endpoint."
+        kicker={`${slotId} / patient context`}
+        primaryHref={`${appBasePath}/demo`}
+        primaryLabel="Open local demo mode"
+        slotId={slotId}
+        title="Patient Context Loading"
+      />
+    );
+  }
+
+  if (contextState.status === "setup-required") {
+    return <SetupRequiredScreen appBasePath={appBasePath} message={contextState.message} slotId={slotId} />;
+  }
+
+  if (contextState.status === "failed") {
+    return (
+      <StatusPanel
+        appBasePath={appBasePath}
+        detail={contextState.message}
+        kicker={`${slotId} / patient context`}
+        primaryHref={appBasePath}
+        primaryLabel="Retry patient load"
+        secondaryHref={`${appBasePath}/demo`}
+        secondaryLabel="Open local demo mode"
+        slotId={slotId}
+        title="Patient Load Failed"
+      />
+    );
+  }
+
+  return (
+    <VisitPrepSidecar
+      appBasePath={appBasePath}
+      contextLabel="patient context"
+      developerDetails={<DeveloperDetails context={contextState.context} />}
+      patient={contextState.patient}
+      slotId={slotId}
+      statusLabel="Patient Loaded"
+    />
+  );
 }
 
 function LaunchScreen({ appBasePath, query, slotId }: { appBasePath: string; query: URLSearchParams; slotId: string }) {
-  const launch = query.get("launch");
-  const issuer = query.get("iss");
+  if (!query.get("iss")) {
+    return <SetupRequiredScreen appBasePath={appBasePath} message="Athena launch parameters are missing." slotId={slotId} />;
+  }
 
   return (
-    <main className="slot-shell">
-      <section className="slot-panel launch-panel">
-        <p className="slot-kicker">{slotId} / SMART launch</p>
-        <h1>Launch Route Ready</h1>
-        <p>
-          This template route is intentionally thin. The participant prompt upgrades this file with
-          the SMART authorization behavior for the assigned app slot.
-        </p>
-        <dl>
-          <div>
-            <dt>Issuer</dt>
-            <dd>{issuer || "Missing iss query parameter"}</dd>
-          </div>
-          <div>
-            <dt>Launch</dt>
-            <dd>{launch || "Missing launch query parameter"}</dd>
-          </div>
-        </dl>
-        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
-          Open local demo mode
-        </a>
-      </section>
-    </main>
+    <StatusPanel
+      appBasePath={appBasePath}
+      detail="Athena launch context received."
+      kicker={`${slotId} / SMART launch`}
+      primaryHref={slotApiPath(slotId, "smart/launch", query)}
+      primaryLabel="Continue SMART launch"
+      secondaryHref={`${appBasePath}/demo`}
+      secondaryLabel="Open local demo mode"
+      slotId={slotId}
+      title="Launch In Progress"
+    />
   );
 }
 
-function CallbackScreen({ appBasePath, query }: { appBasePath: string; query: URLSearchParams }) {
-  const hasCode = Boolean(query.get("code"));
-  const hasState = Boolean(query.get("state"));
-
+function CallbackScreen({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
   return (
-    <main className="slot-shell">
-      <section className="slot-panel launch-panel">
-        <p className="slot-kicker">SMART callback</p>
-        <h1>Callback Route Ready</h1>
-        <p>
-          Authorization codes and token material are never displayed in this workshop UI. This page
-          only confirms whether callback parameters arrived.
-        </p>
+    <StatusPanel
+      appBasePath={appBasePath}
+      detail="The server-side callback endpoint handles code exchange."
+      extra={
         <dl>
+          <div>
+            <dt>Callback endpoint</dt>
+            <dd>{slotApiPath(slotId, "smart/callback")}</dd>
+          </div>
           <div>
             <dt>Authorization code</dt>
-            <dd>{hasCode ? "Present" : "Missing"}</dd>
-          </div>
-          <div>
-            <dt>State</dt>
-            <dd>{hasState ? "Present" : "Missing"}</dd>
+            <dd>Received by server route</dd>
           </div>
         </dl>
-        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
-          Continue to demo
-        </a>
-      </section>
-    </main>
+      }
+      kicker={`${slotId} / SMART callback`}
+      primaryHref={`${appBasePath}?smart=1`}
+      primaryLabel="Load patient context"
+      secondaryHref={`${appBasePath}/demo`}
+      secondaryLabel="Open local demo mode"
+      slotId={slotId}
+      title="Callback Received"
+    />
   );
 }
 
-function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
+function SetupRequiredScreen({ appBasePath, message, slotId }: { appBasePath: string; message: string; slotId: string }) {
+  return (
+    <StatusPanel
+      appBasePath={appBasePath}
+      detail={message}
+      extra={
+        <dl>
+          <div>
+            <dt>Launch URL</dt>
+            <dd>{slotApiPath(slotId, "smart/launch")}</dd>
+          </div>
+          <div>
+            <dt>Post-login redirect</dt>
+            <dd>{slotApiPath(slotId, "smart/callback")}</dd>
+          </div>
+          <div>
+            <dt>Post-logout redirect</dt>
+            <dd>{`${appBasePath}/logout-complete`}</dd>
+          </div>
+        </dl>
+      }
+      kicker={`${slotId} / setup`}
+      primaryHref={slotApiPath(slotId, "smart/launch")}
+      primaryLabel="Start Athena launch"
+      secondaryHref={`${appBasePath}/demo`}
+      secondaryLabel="Open local demo mode"
+      slotId={slotId}
+      title="Setup Required"
+    />
+  );
+}
+
+function VisitPrepSidecar({
+  appBasePath,
+  contextLabel,
+  developerDetails,
+  patient,
+  slotId,
+  statusLabel,
+}: {
+  appBasePath: string;
+  contextLabel: string;
+  developerDetails?: React.ReactNode;
+  patient: PatientProfile;
+  slotId: string;
+  statusLabel: string;
+}) {
   return (
     <main className="sidecar-shell">
       <section className="sidecar-card" aria-labelledby="sidecar-title">
         <header className="sidecar-titlebar">
           <div>
-            <p className="slot-kicker">{slotId} / local demo</p>
+            <p className="slot-kicker">
+              {slotId} / {contextLabel}
+            </p>
             <h1 id="sidecar-title">Visit Prep Sidecar</h1>
           </div>
-          <span>SMART</span>
+          <span>{statusLabel}</span>
         </header>
 
         <section className="patient-strip" aria-label="Patient identity">
@@ -133,6 +309,8 @@ function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: s
           <span>FHIR ID {patient.fhirId}</span>
           <span>{patient.gender}</span>
         </section>
+
+        {developerDetails}
 
         <section className="prep-list" aria-label="Visit prep cards">
           {prepCards.map((card) => (
@@ -167,8 +345,84 @@ function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: s
         </section>
 
         <footer className="slot-footer">
-          <a href={`/api/apps/${slotId}/smart/launch`}>SMART launch API</a>
-          <a href={`/api/apps/${slotId}/smart/callback`}>SMART callback API</a>
+          <a href={slotApiPath(slotId, "smart/launch")}>SMART launch API</a>
+          <a href={slotApiPath(slotId, "smart/callback")}>SMART callback API</a>
+          <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
+        </footer>
+      </section>
+    </main>
+  );
+}
+
+function DeveloperDetails({ context }: { context: PatientContext }) {
+  const patient = context.patient ?? {};
+
+  return (
+    <details>
+      <summary>Developer details</summary>
+      <dl>
+        <div>
+          <dt>Source</dt>
+          <dd>{textValue(context.source)}</dd>
+        </div>
+        <div>
+          <dt>FHIR server</dt>
+          <dd>{textValue(context.serverUrl)}</dd>
+        </div>
+        <div>
+          <dt>FHIR user</dt>
+          <dd>{textValue(context.fhirUser)}</dd>
+        </div>
+        <div>
+          <dt>Patient resource</dt>
+          <dd>{textValue(patient.resourceType)}</dd>
+        </div>
+      </dl>
+    </details>
+  );
+}
+
+function StatusPanel({
+  appBasePath,
+  detail,
+  extra,
+  kicker,
+  primaryHref,
+  primaryLabel,
+  secondaryHref,
+  secondaryLabel,
+  slotId,
+  title,
+}: {
+  appBasePath: string;
+  detail: string;
+  extra?: React.ReactNode;
+  kicker: string;
+  primaryHref: string;
+  primaryLabel: string;
+  secondaryHref?: string;
+  secondaryLabel?: string;
+  slotId: string;
+  title: string;
+}) {
+  return (
+    <main className="slot-shell">
+      <section className="slot-panel launch-panel">
+        <p className="slot-kicker">{kicker}</p>
+        <h1>{title}</h1>
+        <p>{detail}</p>
+        {extra}
+        <a className="slot-primary-action" href={primaryHref}>
+          {primaryLabel}
+        </a>
+        {secondaryHref && secondaryLabel ? (
+          <a className="slot-primary-action" href={secondaryHref}>
+            {secondaryLabel}
+          </a>
+        ) : null}
+        <footer className="slot-footer">
+          <a href={slotApiPath(slotId, "smart/launch")}>SMART launch API</a>
+          <a href={slotApiPath(slotId, "smart/callback")}>SMART callback API</a>
           <a href={`${appBasePath}/logout-complete`}>Logout redirect</a>
         </footer>
       </section>
@@ -178,30 +432,84 @@ function VisitPrepDemo({ appBasePath, slotId }: { appBasePath: string; slotId: s
 
 function LogoutCompleteScreen({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
   return (
-    <main className="slot-shell">
-      <section className="slot-panel launch-panel">
-        <p className="slot-kicker">{slotId} / post-logout redirect</p>
-        <h1>Logout Complete</h1>
-        <p>The Athena logout flow has returned to this workshop app slot.</p>
-        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
-          Open local demo mode
-        </a>
-      </section>
-    </main>
+    <StatusPanel
+      appBasePath={appBasePath}
+      detail="The Athena logout flow has returned to this workshop app slot."
+      kicker={`${slotId} / post-logout redirect`}
+      primaryHref={`${appBasePath}/demo`}
+      primaryLabel="Open local demo mode"
+      slotId={slotId}
+      title="Logout Complete"
+    />
   );
 }
 
-function AppError({ appBasePath }: { appBasePath: string }) {
+function AppError({ appBasePath, slotId }: { appBasePath: string; slotId: string }) {
   return (
-    <main className="slot-shell">
-      <section className="slot-panel launch-panel">
-        <p className="slot-kicker">Unknown app route</p>
-        <h1>Route Not Found</h1>
-        <p>This workshop slot supports home, demo, launch, callback, and logout-complete routes.</p>
-        <a className="slot-primary-action" href={`${appBasePath}/demo`}>
-          Open demo
-        </a>
-      </section>
-    </main>
+    <StatusPanel
+      appBasePath={appBasePath}
+      detail="This workshop slot supports home, demo, launch, callback, and logout-complete routes."
+      kicker="Unknown app route"
+      primaryHref={`${appBasePath}/demo`}
+      primaryLabel="Open demo"
+      slotId={slotId}
+      title="Route Not Found"
+    />
   );
+}
+
+function slotApiPath(slotId: string, path: "patient-context" | "smart/callback" | "smart/launch", query?: URLSearchParams) {
+  const search = query?.toString();
+  return `/api/apps/${slotId}/${path}${search ? `?${search}` : ""}`;
+}
+
+async function readJson(response: Response) {
+  const text = await response.text();
+  if (!text) return {};
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return {};
+  }
+}
+
+function patientProfile(context: PatientContext): PatientProfile {
+  const patient = context.patient ?? {};
+
+  return {
+    dob: textValue(patient.birthDate),
+    fhirId: textValue(patient.id, textValue(context.patientId)),
+    gender: textValue(patient.gender),
+    name: patientName(patient.name),
+  };
+}
+
+function patientName(value: unknown) {
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (!entry || typeof entry !== "object") continue;
+      const record = entry as Record<string, unknown>;
+      const text = stringValue(record.text);
+      if (text) return text;
+      const given = Array.isArray(record.given) ? record.given.filter((item): item is string => typeof item === "string") : [];
+      const family = stringValue(record.family);
+      const assembled = [...given, family].filter(Boolean).join(" ");
+      if (assembled) return assembled;
+    }
+  }
+
+  return "Unknown patient";
+}
+
+function errorMessage(context: PatientContext) {
+  return stringValue(context.error) ?? "Patient context could not be loaded.";
+}
+
+function textValue(value: unknown, fallback = "Unavailable") {
+  return stringValue(value) ?? fallback;
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
 }
