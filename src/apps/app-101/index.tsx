@@ -259,7 +259,7 @@ function SmartVisitPrep({
   }, [patientContextChange]);
 
   if (state === "patient loaded" && patientSummary) {
-    return <VisitPrepDemo patientSummary={patientSummary} slotId={slotId} />;
+    return <VisitPrepDemo patientSummary={patientSummary} reopenOnPatientLoad={Boolean(contextRequest.updatedPatient)} slotId={slotId} />;
   }
 
   return (
@@ -292,10 +292,12 @@ function SmartVisitPrep({
 
 function VisitPrepDemo({
   patientSummary = patient,
+  reopenOnPatientLoad = false,
   slotId,
   stateLabel,
 }: {
   patientSummary?: PatientSummary;
+  reopenOnPatientLoad?: boolean;
   slotId: string;
   stateLabel?: string;
 }) {
@@ -312,6 +314,12 @@ function VisitPrepDemo({
       sendEmbeddedAppMessage("appShowBadgePersistent");
     }
   }, [isVitalsReviewed]);
+
+  useEffect(() => {
+    if (reopenOnPatientLoad && !isVitalsReviewed) {
+      sendEmbeddedAppMessage("appReopen");
+    }
+  }, [isVitalsReviewed, patientSummary.fhirId, reopenOnPatientLoad]);
 
   function openDetails() {
     sendEmbeddedAppMessage("appResize", { newWidth: "600" });

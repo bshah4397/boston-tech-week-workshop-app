@@ -222,6 +222,11 @@ describe("app-101 Visit Prep sidecar", () => {
 
   it("reloads updated patient context from updatedPatient and resets detail review state", async () => {
     const user = userEvent.setup();
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage },
+    });
     vi.spyOn(console, "log").mockImplementation(() => undefined);
     vi.stubGlobal(
       "fetch",
@@ -252,6 +257,15 @@ describe("app-101 Visit Prep sidecar", () => {
     expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
     expect(screen.queryByText("Reviewed")).not.toBeInTheDocument();
     expect(screen.getByLabelText("Needs review")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /minimize/i })).not.toBeInTheDocument();
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appReopen",
+        methodVersion: "1.0.0",
+      },
+      "*",
+    );
   });
 
   it("does not reload plain patient context for patient-change events without an identifier", async () => {
