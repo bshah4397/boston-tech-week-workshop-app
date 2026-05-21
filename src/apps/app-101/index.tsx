@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SlotAppProps, SlotConfig } from "../../slot-types";
+import { sendEmbeddedAppMessage } from "./post-message";
 
 export const slotConfig: SlotConfig = {
   description: "Workshop participant slot",
@@ -236,6 +237,18 @@ function VisitPrepDemo({
   slotId: string;
   stateLabel?: string;
 }) {
+  const [isDetailOpen, setIsDetailOpen] = useState(false);
+
+  function openDetails() {
+    sendEmbeddedAppMessage("appResize", { newWidth: "600" });
+    setIsDetailOpen(true);
+  }
+
+  function collapseDetails() {
+    sendEmbeddedAppMessage("appResize", { newWidth: "400" });
+    setIsDetailOpen(false);
+  }
+
   return (
     <main className="sidecar-shell">
       <section className="sidecar-card" aria-labelledby="sidecar-title">
@@ -249,16 +262,44 @@ function VisitPrepDemo({
 
         <PatientBanner patientSummary={patientSummary} />
 
-        <section className="prep-list" aria-label="Visit prep cards">
-          {prepCards.map((card) => (
-            <article className={`prep-card ${card.tone}`} key={card.label}>
-              <h2>{card.label}</h2>
-              <p>{card.text}</p>
-            </article>
-          ))}
-        </section>
+        {isDetailOpen ? <VitalsDetailPanel onCollapse={collapseDetails} /> : <PrepCardList onOpenDetails={openDetails} />}
       </section>
     </main>
+  );
+}
+
+function PrepCardList({ onOpenDetails }: { onOpenDetails: () => void }) {
+  return (
+    <section className="prep-list" aria-label="Visit prep cards">
+      {prepCards.map((card) => (
+        <article className={`prep-card ${card.tone}`} key={card.label}>
+          <h2>{card.label}</h2>
+          <p>{card.text}</p>
+          {card.label === "Vitals review due" ? (
+            <button className="slot-primary-action" onClick={onOpenDetails} type="button">
+              Open details
+            </button>
+          ) : null}
+        </article>
+      ))}
+    </section>
+  );
+}
+
+function VitalsDetailPanel({ onCollapse }: { onCollapse: () => void }) {
+  return (
+    <section className="prep-list" aria-label="Review details panel">
+      <article className="prep-card default">
+        <h2>Review details</h2>
+        <h3>Rationale</h3>
+        <p>Vitals are ready to compare with the current visit context before the encounter continues.</p>
+        <h3>Next steps</h3>
+        <p>Review the latest values, confirm whether follow-up is needed, then return to the compact prep list.</p>
+        <button className="slot-primary-action" onClick={onCollapse} type="button">
+          Collapse details
+        </button>
+      </article>
+    </section>
   );
 }
 

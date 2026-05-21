@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import App101, { patientContextApiPath } from ".";
 
@@ -24,6 +25,47 @@ describe("app-101 Visit Prep sidecar", () => {
     expect(screen.getByRole("heading", { name: "Vitals review due" })).toBeInTheDocument();
     expect(screen.getByText("Latest vitals are available for review before the encounter.")).toBeInTheDocument();
     expect(screen.getByText("Medication list is ready for routine reconciliation.")).toBeInTheDocument();
+  });
+
+  it("opens and collapses vitals details with appResize messages", async () => {
+    const user = userEvent.setup();
+    const postMessage = vi.fn();
+    Object.defineProperty(window, "parent", {
+      configurable: true,
+      value: { postMessage },
+    });
+
+    render(<App101 {...baseProps} />);
+
+    await user.click(screen.getByRole("button", { name: "Open details" }));
+
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appResize",
+        methodVersion: "1.0.0",
+        newWidth: "600",
+      },
+      "*",
+    );
+    expect(screen.getByRole("heading", { name: "Review details" })).toBeInTheDocument();
+    expect(screen.getByText("Rationale")).toBeInTheDocument();
+    expect(screen.getByText("Next steps")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Medication reconciliation" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Collapse details" }));
+
+    expect(postMessage).toHaveBeenLastCalledWith(
+      {
+        type: "embeddedAppAPIMessage",
+        method: "appResize",
+        methodVersion: "1.0.0",
+        newWidth: "400",
+      },
+      "*",
+    );
+    expect(screen.queryByRole("heading", { name: "Review details" })).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Medication reconciliation" })).toBeInTheDocument();
   });
 
   it("shows setup required when launch parameters are missing", () => {
