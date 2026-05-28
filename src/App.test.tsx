@@ -30,6 +30,15 @@ describe("app host", () => {
     expect(screen.getByText(/no app folder has been created/i)).toBeInTheDocument();
   });
 
+  it("routes the cloned app-006 slot to its demo app", () => {
+    window.history.pushState({}, "", "/app-006/demo");
+    render(<App />);
+
+    expect(screen.getByText("app-006")).toBeInTheDocument();
+    expect(screen.getByText("Local Demo")).toBeInTheDocument();
+    expect(screen.getByText("Alex Rivers")).toBeInTheDocument();
+  });
+
   it("renders the slot logout-complete screen", () => {
     render(
       <TemplateApp
