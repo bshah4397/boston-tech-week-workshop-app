@@ -28,7 +28,7 @@ export const WORKSHOP_FEATURES: WorkshopFeatures = {
   // Step 6: turn the active gap into an automatic badge-driving state.
   automaticBadge: true,
   // Step 7: listen for Embedded App Framework patient context changes.
-  patientContextListener: false,
+  patientContextListener: true,
   // Extension: reopen after the provider manually minimizes and changes patient.
   reopenAfterPatientChange: false,
 };
