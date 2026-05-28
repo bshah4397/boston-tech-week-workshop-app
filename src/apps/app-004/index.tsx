@@ -20,7 +20,7 @@ type WorkshopFeatures = {
 
 export const WORKSHOP_FEATURES: WorkshopFeatures = {
   // Step 3: enable SMART patient-context loading from the slot-scoped API.
-  smartPatientContext: false,
+  smartPatientContext: true,
   // Step 4: reveal the neutral Visit Prep card layout.
   visitPrepCards: false,
   // Step 5: reveal detail expansion and collapse behavior.
