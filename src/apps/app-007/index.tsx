@@ -30,7 +30,7 @@ export const WORKSHOP_FEATURES: WorkshopFeatures = {
   // Step 7: listen for Embedded App Framework patient context changes.
   patientContextListener: true,
   // Extension: reopen after the provider manually minimizes and changes patient.
-  reopenAfterPatientChange: false,
+  reopenAfterPatientChange: true,
 };
 
 type FhirPatient = {
