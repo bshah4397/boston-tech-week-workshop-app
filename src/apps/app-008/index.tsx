@@ -24,9 +24,9 @@ export const WORKSHOP_FEATURES: WorkshopFeatures = {
   // Step 4: reveal the neutral Visit Prep card layout.
   visitPrepCards: true,
   // Step 5: reveal detail expansion and collapse behavior.
-  resizeDetails: false,
+  resizeDetails: true,
   // Step 6: turn the active gap into an automatic badge-driving state.
-  automaticBadge: false,
+  automaticBadge: true,
   // Step 7: listen for Embedded App Framework patient context changes.
   patientContextListener: false,
   // Extension: reopen after the provider manually minimizes and changes patient.
